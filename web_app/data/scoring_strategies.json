@@ -1,0 +1,344 @@
+{
+  "default_strategy": "balanced",
+  "strategies": [
+    {
+      "id": "balanced",
+      "name": "均衡轮动",
+      "description": "延续当前模型：20日动量为主，量价确认，MA20/MA60趋势过滤。",
+      "max_holdings": 8,
+      "tolerance_count": 12,
+      "momentum_weight": 50,
+      "vol_price": {
+        "default_multiplier": 8,
+        "rules": [
+          {
+            "min_vol_ratio": 1.5,
+            "min_return_1d": 0.01,
+            "multiplier": 15
+          },
+          {
+            "max_vol_ratio": 1,
+            "max_return_1d": 0,
+            "multiplier": 5
+          }
+        ]
+      },
+      "trend": {
+        "base_score": 5,
+        "bias_unit": 0.015,
+        "bias_weight": 10,
+        "max_score": 20,
+        "below_ma20_penalty": 0.5
+      },
+      "strict_sell": {
+        "below_ma20": true,
+        "rank_gt_tolerance": true,
+        "fatal_dump": {
+          "min_vol_ratio": 2,
+          "max_return_1d": -0.02
+        }
+      },
+      "logic_notes": [
+        "动量得分 = 20日涨幅横截面百分位排名 × 50。",
+        "量能得分采用量比倍数法：默认量比 × 8；量比 > 1.5 且当日涨幅 > 1% 时按猛烈抢筹处理，量比 × 15；量比 < 1 且当日下跌时按温和洗盘处理，量比 × 5。",
+        "趋势得分要求 MA20 > MA60；MA20 相对 MA60 偏离越大得分越高，最高 20；价格跌破 MA20 时趋势分减半。",
+        "综合总分 = 动量得分 + 量能得分 + 趋势得分。",
+        "评级规则：综合总分排序前 8 为买入配仓；第 9 到第 12 为持有观察；跌破 MA20、排名跌出观察区、或量比 > 2 且当日跌幅 < -2% 时空仓回避。",
+        "风格：均衡型默认策略，兼顾动量、量价确认和趋势过滤。"
+      ]
+    },
+    {
+      "id": "classic_rank_volume",
+      "name": "经典横截面量能",
+      "description": "早期版本：20日动量×50，量比横截面排名×30，量比低于0.8时量能得分减半，MA20/MA60趋势过滤。",
+      "max_holdings": 8,
+      "tolerance_count": 12,
+      "momentum_weight": 50,
+      "vol_price": {
+        "method": "rank_percentile",
+        "weight": 30,
+        "low_vol_ratio_threshold": 0.8,
+        "low_vol_multiplier": 0.5
+      },
+      "trend": {
+        "base_score": 5,
+        "bias_unit": 0.015,
+        "bias_weight": 10,
+        "max_score": 20,
+        "below_ma20_penalty": 0.5
+      },
+      "strict_sell": {
+        "below_ma20": true,
+        "rank_gt_tolerance": true
+      },
+      "logic_notes": [
+        "动量得分 = 20日涨幅横截面百分位排名 × 50。",
+        "量能得分采用横截面排名法：量比横截面百分位排名 × 30；如果量比 < 0.8，则量能得分减半。",
+        "趋势得分要求 MA20 > MA60；MA20 相对 MA60 偏离越大得分越高，最高 20；价格跌破 MA20 时趋势分减半。",
+        "综合总分 = 动量得分 + 量能得分 + 趋势得分。",
+        "评级规则：综合总分排序前 8 为买入配仓；第 9 到第 12 为持有观察；跌破 MA20 或排名跌出观察区时空仓回避。",
+        "风格：早期经典版本，量能看全池相对强弱，而不是单标的量比倍数。"
+      ]
+    },
+    {
+      "id": "shanghai_dead_cross_half",
+      "name": "上证中线半仓",
+      "description": "以510210上证指数ETF作为大盘代理；中线MA20低于MA60时保持5成仓，金叉后恢复均衡轮动。",
+      "max_holdings": 8,
+      "tolerance_count": 12,
+      "momentum_weight": 50,
+      "vol_price": {
+        "default_multiplier": 8,
+        "rules": [
+          {
+            "min_vol_ratio": 1.5,
+            "min_return_1d": 0.01,
+            "multiplier": 15
+          },
+          {
+            "max_vol_ratio": 1,
+            "max_return_1d": 0,
+            "multiplier": 5
+          }
+        ]
+      },
+      "trend": {
+        "base_score": 5,
+        "bias_unit": 0.015,
+        "bias_weight": 10,
+        "max_score": 20,
+        "below_ma20_penalty": 0.5
+      },
+      "strict_sell": {
+        "below_ma20": true,
+        "rank_gt_tolerance": true,
+        "fatal_dump": {
+          "min_vol_ratio": 2,
+          "max_return_1d": -0.02
+        }
+      },
+      "market_filter": {
+        "type": "ma_cross_position_control",
+        "symbol": "510210",
+        "name": "上证指数ETF",
+        "fast_ma": 20,
+        "slow_ma": 60,
+        "control_signal": "medium_trend",
+        "risk_off_when": "MA20 < MA60",
+        "restore_when": "MA20 >= MA60",
+        "risk_off_position_ratio": 0.5
+      },
+      "logic_notes": [
+        "基础打分完全沿用均衡轮动：20日动量、量价倍数法、MA20/MA60趋势得分相加。",
+        "大盘过滤使用 510210 上证指数ETF 作为上证指数代理，同时输出三组金叉/死叉：中线 MA20/MA60、短线 MA5/MA20、MACD DIF/DEA。",
+        "当 510210 的 MA20 < MA60 时判定为死叉/空头阶段，目标标的仍保留 8 个，但每个目标仓位减半，总体约保持 5 成仓。",
+        "当 510210 的 MA20 >= MA60 时视为金叉或多头恢复，目标持仓恢复 8，观察区恢复 12。",
+        "短线 MA5/MA20 和 MACD DIF/DEA 暂作为辅助观察信号展示，不直接改变仓位。",
+        "该策略适合用来测试大盘弱势时无脑降风险、强势恢复后再满仓轮动的效果。"
+      ]
+    },
+    {
+      "id": "shanghai_short_cross_half",
+      "name": "上证短线半仓",
+      "description": "以510210上证指数ETF作为大盘代理；短线MA5低于MA20时保持5成仓，金叉后恢复均衡轮动。",
+      "max_holdings": 8,
+      "tolerance_count": 12,
+      "momentum_weight": 50,
+      "vol_price": {
+        "default_multiplier": 8,
+        "rules": [
+          {
+            "min_vol_ratio": 1.5,
+            "min_return_1d": 0.01,
+            "multiplier": 15
+          },
+          {
+            "max_vol_ratio": 1,
+            "max_return_1d": 0,
+            "multiplier": 5
+          }
+        ]
+      },
+      "trend": {
+        "base_score": 5,
+        "bias_unit": 0.015,
+        "bias_weight": 10,
+        "max_score": 20,
+        "below_ma20_penalty": 0.5
+      },
+      "strict_sell": {
+        "below_ma20": true,
+        "rank_gt_tolerance": true,
+        "fatal_dump": {
+          "min_vol_ratio": 2,
+          "max_return_1d": -0.02
+        }
+      },
+      "market_filter": {
+        "type": "ma_cross_position_control",
+        "symbol": "510210",
+        "name": "上证指数ETF",
+        "control_signal": "short_trade",
+        "risk_off_when": "MA5 < MA20",
+        "restore_when": "MA5 >= MA20",
+        "risk_off_position_ratio": 0.5
+      },
+      "logic_notes": [
+        "基础打分完全沿用均衡轮动。",
+        "大盘过滤使用 510210 上证指数ETF，同时输出中线、短线、MACD 三组信号。",
+        "该策略只用短线 MA5/MA20 控制仓位：MA5 < MA20 时 8 个目标各减半仓，总体约 5 成；MA5 >= MA20 时恢复满仓。",
+        "中线 MA20/MA60 和 MACD DIF/DEA 作为辅助观察信号展示，不直接改变仓位。"
+      ]
+    },
+    {
+      "id": "shanghai_macd_cross_half",
+      "name": "上证MACD半仓",
+      "description": "以510210上证指数ETF作为大盘代理；MACD DIF低于DEA时保持5成仓，金叉后恢复均衡轮动。",
+      "max_holdings": 8,
+      "tolerance_count": 12,
+      "momentum_weight": 50,
+      "vol_price": {
+        "default_multiplier": 8,
+        "rules": [
+          {
+            "min_vol_ratio": 1.5,
+            "min_return_1d": 0.01,
+            "multiplier": 15
+          },
+          {
+            "max_vol_ratio": 1,
+            "max_return_1d": 0,
+            "multiplier": 5
+          }
+        ]
+      },
+      "trend": {
+        "base_score": 5,
+        "bias_unit": 0.015,
+        "bias_weight": 10,
+        "max_score": 20,
+        "below_ma20_penalty": 0.5
+      },
+      "strict_sell": {
+        "below_ma20": true,
+        "rank_gt_tolerance": true,
+        "fatal_dump": {
+          "min_vol_ratio": 2,
+          "max_return_1d": -0.02
+        }
+      },
+      "market_filter": {
+        "type": "macd_cross_position_control",
+        "symbol": "510210",
+        "name": "上证指数ETF",
+        "control_signal": "macd",
+        "risk_off_when": "DIF < DEA",
+        "restore_when": "DIF >= DEA",
+        "risk_off_position_ratio": 0.5
+      },
+      "logic_notes": [
+        "基础打分完全沿用均衡轮动。",
+        "大盘过滤使用 510210 上证指数ETF，同时输出中线、短线、MACD 三组信号。",
+        "该策略只用 MACD DIF/DEA 控制仓位：DIF < DEA 时 8 个目标各减半仓，总体约 5 成；DIF >= DEA 时恢复满仓。",
+        "中线 MA20/MA60 和短线 MA5/MA20 作为辅助观察信号展示，不直接改变仓位。"
+      ]
+    },
+    {
+      "id": "momentum_aggressive",
+      "name": "强动量进攻",
+      "description": "提高20日涨幅权重，放大量价共振，适合行情扩散或趋势加速阶段。",
+      "max_holdings": 6,
+      "tolerance_count": 10,
+      "momentum_weight": 65,
+      "vol_price": {
+        "default_multiplier": 7,
+        "rules": [
+          {
+            "min_vol_ratio": 1.8,
+            "min_return_1d": 0.012,
+            "multiplier": 18,
+            "cap": 35
+          },
+          {
+            "min_vol_ratio": 1.2,
+            "min_return_1d": 0,
+            "multiplier": 10
+          },
+          {
+            "max_return_1d": -0.01,
+            "multiplier": 3
+          }
+        ]
+      },
+      "trend": {
+        "base_score": 4,
+        "bias_unit": 0.02,
+        "bias_weight": 8,
+        "max_score": 16,
+        "below_ma20_penalty": 0.35
+      },
+      "strict_sell": {
+        "below_ma20": true,
+        "rank_gt_tolerance": true,
+        "fatal_dump": {
+          "min_vol_ratio": 2.5,
+          "max_return_1d": -0.025
+        }
+      },
+      "logic_notes": [
+        "动量得分 = 20日涨幅横截面百分位排名 × 65，比默认策略更重视短中期涨幅。",
+        "量能得分采用量比倍数法：默认量比 × 7；量比 > 1.8 且当日涨幅 > 1.2% 时量比 × 18，最高 35；量比 > 1.2 且当日非负时量比 × 10；当日跌幅 < -1% 时量比 × 3。",
+        "趋势得分最高 16，低于默认策略，表示该策略更偏向动量和量价加速，而不是慢趋势结构。",
+        "综合总分 = 动量得分 + 量能得分 + 趋势得分。",
+        "评级规则：综合总分排序前 6 为买入配仓；第 7 到第 10 为持有观察；跌破 MA20、排名跌出观察区、或量比 > 2.5 且当日跌幅 < -2.5% 时空仓回避。",
+        "风格：集中进攻，适合强趋势或热点扩散阶段，波动容忍更高。"
+      ]
+    },
+    {
+      "id": "trend_defensive",
+      "name": "防守趋势",
+      "description": "降低量价噪声，强化均线结构和MA20防守，适合震荡或回撤控制。",
+      "max_holdings": 5,
+      "tolerance_count": 8,
+      "momentum_weight": 38,
+      "vol_price": {
+        "default_multiplier": 5,
+        "rules": [
+          {
+            "min_vol_ratio": 1.3,
+            "min_return_1d": 0.006,
+            "multiplier": 9,
+            "cap": 20
+          },
+          {
+            "max_return_1d": -0.006,
+            "multiplier": 2
+          }
+        ]
+      },
+      "trend": {
+        "base_score": 8,
+        "bias_unit": 0.012,
+        "bias_weight": 14,
+        "max_score": 28,
+        "below_ma20_penalty": 0.2
+      },
+      "strict_sell": {
+        "below_ma20": true,
+        "rank_gt_tolerance": true,
+        "fatal_dump": {
+          "min_vol_ratio": 1.8,
+          "max_return_1d": -0.018
+        }
+      },
+      "logic_notes": [
+        "动量得分 = 20日涨幅横截面百分位排名 × 38，比默认策略低，减少纯涨幅追逐。",
+        "量能得分采用量比倍数法：默认量比 × 5；量比 > 1.3 且当日涨幅 > 0.6% 时量比 × 9，最高 20；当日跌幅 < -0.6% 时量比 × 2。",
+        "趋势得分最高 28，高于默认策略，强调 MA20 > MA60 的趋势结构；价格跌破 MA20 时趋势分只保留 20%。",
+        "综合总分 = 动量得分 + 量能得分 + 趋势得分。",
+        "评级规则：综合总分排序前 5 为买入配仓；第 6 到第 8 为持有观察；跌破 MA20、排名跌出观察区、或量比 > 1.8 且当日跌幅 < -1.8% 时空仓回避。",
+        "风格：防守趋势，适合震荡市或回撤控制优先的阶段。"
+      ]
+    }
+  ]
+}
