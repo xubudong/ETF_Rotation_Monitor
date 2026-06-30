@@ -101,3 +101,36 @@ python -m web_app.smoke_test
 - `new_tech`：内置活跃科技池；页面点击“更新科技池”后，会优先读取 `web_app/data/new_tech_pool.json`。
 
 新增或删除海外/QDII 标的时，直接编辑 `global` 对象即可，例如 `520870: 巴西ETF易方达`。新加入的标的需要点一次“更新本地库”，拿到截至前一交易日收盘的历史 K 线后才会进入完整评分和排名。
+
+
+## Runtime, .env and service scripts
+
+Create `.env` from `.env.example` when local secrets or runtime defaults are needed:
+
+```text
+AKSHARE_PROXY_TOKEN=your-token
+WEB_HOST=127.0.0.1
+WEB_PORT=8000
+WEB_PORT_SCAN_LIMIT=30
+```
+
+Environment priority is: process environment > `.env` > code defaults. The real `.env` file is ignored by Git.
+
+Windows:
+
+```powershell
+.\run_web.ps1              # background service
+.\run_web.ps1 -Foreground  # foreground debug mode
+.\stop_web.ps1             # stop by runtime/web.pid
+```
+
+Linux:
+
+```bash
+chmod +x run_web.sh stop_web.sh
+./run_web.sh              # background service
+./run_web.sh --foreground # foreground debug mode
+./stop_web.sh             # stop by runtime/web.pid
+```
+
+Runtime PID and logs are written under `runtime/`, which is ignored by Git.

@@ -4,6 +4,7 @@ import os
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
+ENV_FILE = ROOT / ".env"
 CACHE_DIR = ROOT / "etf_cache"
 DATA_DIR = ROOT / "web_app" / "data"
 CACHE_DB = DATA_DIR / "etf_cache.sqlite"
@@ -11,6 +12,10 @@ NEW_TECH_POOL_FILE = DATA_DIR / "new_tech_pool.json"
 POOLS_CONFIG_FILE = DATA_DIR / "pools.json"
 PORTFOLIO_INDUSTRY_FILE = DATA_DIR / "portfolio_industries.json"
 STATIC_DIR = Path(__file__).resolve().parent / "static"
+
+from .env_loader import load_project_env
+
+load_project_env(ENV_FILE)
 
 POOL_SPECS = {
     "a_share": {"title": "A 股板块轮动", "var": "A_SHARE_ETF_POOL", "sheet": "A股板块轮动"},

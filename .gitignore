@@ -21,3 +21,4 @@ web_app/data/uploads/
 
 *.log
 *.pid
+runtime/
