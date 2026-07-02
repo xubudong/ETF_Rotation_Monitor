@@ -480,6 +480,18 @@ button:disabled {
   padding: 0 12px;
 }
 
+.portfolio-toggle {
+  min-width: 58px;
+}
+
+.portfolio-body[hidden] {
+  display: none;
+}
+
+.portfolio-panel.is-collapsed .portfolio-header {
+  margin-bottom: 0;
+}
+
 .portfolio-metrics {
   display: grid;
   grid-template-columns: repeat(6, minmax(0, 1fr));

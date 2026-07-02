@@ -26,6 +26,7 @@ const state = {
   payload: null,
   config: null,
   portfolio: null,
+  portfolioCollapsed: true,
   backtest: null,
   backtestRequest: null,
   rankingDate: null,
@@ -84,7 +85,10 @@ const els = {
   backtestMetrics: document.querySelector("#backtestMetrics"),
   backtestChart: document.querySelector("#backtestChart"),
   backtestRebalanceBody: document.querySelector("#backtestRebalanceBody"),
+  portfolioPanel: document.querySelector(".portfolio-panel"),
+  portfolioBody: document.querySelector("#portfolioBody"),
   portfolioPoolSelect: document.querySelector("#portfolioPoolSelect"),
+  portfolioToggleBtn: document.querySelector("#portfolioToggleBtn"),
   portfolioRefreshBtn: document.querySelector("#portfolioRefreshBtn"),
   portfolioStatus: document.querySelector("#portfolioStatus"),
   portfolioMetrics: document.querySelector("#portfolioMetrics"),
@@ -436,7 +440,7 @@ async function uploadHoldings(poolKey, fileInput) {
     await loadHoldingsStatus();
     await loadRankings(true);
     await loadAccountTodayChange();
-    if (els.portfolioPoolSelect.value === poolKey || els.portfolioPoolSelect.value === "all") {
+    if (!state.portfolioCollapsed && (els.portfolioPoolSelect.value === poolKey || els.portfolioPoolSelect.value === "all")) {
       await loadPortfolioAnalysis();
     }
     setStatus(`${state.config.pools[poolKey]}持仓已更新：${result.count} 个标的，${result.updated_at}`, "ok");
@@ -452,6 +456,21 @@ function syncPortfolioPoolWithActiveTab() {
     els.portfolioPoolSelect.value = state.activePool;
   } else {
     els.portfolioPoolSelect.value = "all";
+  }
+}
+
+function setPortfolioCollapsed(collapsed) {
+  state.portfolioCollapsed = collapsed;
+  els.portfolioPanel.classList.toggle("is-collapsed", collapsed);
+  els.portfolioBody.hidden = collapsed;
+  els.portfolioToggleBtn.textContent = collapsed ? "展开" : "收起";
+  els.portfolioToggleBtn.setAttribute("aria-expanded", String(!collapsed));
+}
+
+async function expandPortfolioAndLoad(force = false) {
+  setPortfolioCollapsed(false);
+  if (force || !state.portfolio) {
+    await loadPortfolioAnalysis();
   }
 }
 
@@ -954,12 +973,15 @@ document.addEventListener("click", (event) => {
   if (tab) {
     state.activePool = tab.dataset.pool;
     syncPortfolioPoolWithActiveTab();
+    state.portfolio = null;
     if (els.backtestPoolSelect.querySelector(`option[value="${state.activePool}"]`)) {
       els.backtestPoolSelect.value = state.activePool;
       invalidateBacktestExport();
     }
     render();
-    loadPortfolioAnalysis();
+    if (!state.portfolioCollapsed) {
+      loadPortfolioAnalysis();
+    }
     return;
   }
   const th = event.target.closest("th[data-sort]");
@@ -983,8 +1005,15 @@ els.aShareHoldBtn.addEventListener("click", () => chooseHoldingsFile(els.aShareH
 els.globalHoldBtn.addEventListener("click", () => chooseHoldingsFile(els.globalHoldFile));
 els.aShareHoldFile.addEventListener("change", () => uploadHoldings("a_share", els.aShareHoldFile));
 els.globalHoldFile.addEventListener("change", () => uploadHoldings("global", els.globalHoldFile));
-els.portfolioPoolSelect.addEventListener("change", () => loadPortfolioAnalysis());
-els.portfolioRefreshBtn.addEventListener("click", () => loadPortfolioAnalysis());
+els.portfolioPoolSelect.addEventListener("change", () => {
+  state.portfolio = null;
+  if (!state.portfolioCollapsed) loadPortfolioAnalysis();
+});
+els.portfolioToggleBtn.addEventListener("click", () => {
+  if (state.portfolioCollapsed) expandPortfolioAndLoad(false);
+  else setPortfolioCollapsed(true);
+});
+els.portfolioRefreshBtn.addEventListener("click", () => expandPortfolioAndLoad(true));
 els.sourceSelect.addEventListener("change", () => loadRankings(true));
 els.strategySelect.addEventListener("change", () => {
   state.strategyId = els.strategySelect.value;
@@ -1030,7 +1059,7 @@ els.autoRefresh.addEventListener("change", resetTimer);
     await loadRankings(false);
     await loadAccountTodayChange();
     syncPortfolioPoolWithActiveTab();
-    await loadPortfolioAnalysis();
+    setPortfolioCollapsed(true);
     resetTimer();
   } catch (error) {
     setStatus(`初始化失败：${error.message}`, "error");
