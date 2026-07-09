@@ -2,9 +2,10 @@ const columns = [
   { key: "排名", label: "#", type: "number" },
   { key: "代码", label: "代码", type: "text" },
   { key: "名称", label: "名称", type: "text" },
-  { key: "持仓", label: "持仓", type: "text" },
-  { key: "账户", label: "账户", type: "text" },
+  { key: "持仓操作", label: "持有", type: "holdingControl" },
+  { key: "持仓市值", label: "市值(万)", type: "holdingValue" },
   { key: "仓位占比", label: "仓位", type: "holdPercent" },
+  { key: "账户", label: "账户", type: "text" },
   { key: "板块", label: "板块", type: "text" },
   { key: "昨日排名", label: "昨日", type: "number" },
   { key: "排名变化", label: "变化", type: "text" },
@@ -27,8 +28,6 @@ const columns = [
 const state = {
   payload: null,
   config: null,
-  portfolio: null,
-  portfolioCollapsed: true,
   backtest: null,
   backtestRequest: null,
   rankingDate: null,
@@ -67,10 +66,7 @@ const els = {
   ratingFilter: document.querySelector("#ratingFilter"),
   holdOnly: document.querySelector("#holdOnly"),
   buyOnly: document.querySelector("#buyOnly"),
-  aShareHoldFile: document.querySelector("#aShareHoldFile"),
-  aShareHoldBtn: document.querySelector("#aShareHoldBtn"),
-  globalHoldFile: document.querySelector("#globalHoldFile"),
-  globalHoldBtn: document.querySelector("#globalHoldBtn"),
+  holdingEditStatus: document.querySelector("#holdingEditStatus"),
   summaryGrid: document.querySelector("#summaryGrid"),
   backtestPoolSelect: document.querySelector("#backtestPoolSelect"),
   backtestStrategySelect: document.querySelector("#backtestStrategySelect"),
@@ -87,15 +83,6 @@ const els = {
   backtestMetrics: document.querySelector("#backtestMetrics"),
   backtestChart: document.querySelector("#backtestChart"),
   backtestRebalanceBody: document.querySelector("#backtestRebalanceBody"),
-  portfolioPanel: document.querySelector(".portfolio-panel"),
-  portfolioBody: document.querySelector("#portfolioBody"),
-  portfolioPoolSelect: document.querySelector("#portfolioPoolSelect"),
-  portfolioToggleBtn: document.querySelector("#portfolioToggleBtn"),
-  portfolioRefreshBtn: document.querySelector("#portfolioRefreshBtn"),
-  portfolioStatus: document.querySelector("#portfolioStatus"),
-  portfolioMetrics: document.querySelector("#portfolioMetrics"),
-  portfolioBars: document.querySelector("#portfolioBars"),
-  portfolioDetailBody: document.querySelector("#portfolioDetailBody"),
   tableTitle: document.querySelector("#tableTitle"),
   rowCount: document.querySelector("#rowCount"),
   tableHead: document.querySelector("#tableHead"),
@@ -107,6 +94,7 @@ function fmt(value, type) {
   const num = Number(value);
   if (type === "percent" && Number.isFinite(num)) return `${(num * 100).toFixed(2)}%`;
   if (type === "holdPercent" && Number.isFinite(num)) return `${num.toFixed(2)}%`;
+  if (type === "holdingValue" && Number.isFinite(num)) return `${(num / 10000).toFixed(2)}`;
   if (type === "price" && Number.isFinite(num)) return num.toFixed(3);
   if (type === "ratio" && Number.isFinite(num)) return num.toFixed(2);
   if (type === "score" && Number.isFinite(num)) return num.toFixed(1);
@@ -259,9 +247,14 @@ function setAccountChangeNode(changeEl, pnlEl, account) {
   const pnl = account?.today_pnl;
   changeEl.textContent = signedPct(ret);
   changeEl.className = Number(ret) > 0 ? "positive" : Number(ret) < 0 ? "negative" : "";
-  pnlEl.textContent = account?.holdings
-    ? `${signedMoney(pnl)} / 覆盖 ${account.covered}/${account.holdings}`
-    : "暂无持仓";
+  if (!account?.holdings) {
+    pnlEl.textContent = "暂无持仓";
+    return;
+  }
+  const missing = Math.max(Number(account.holdings || 0) - Number(account.covered || 0), 0);
+  pnlEl.textContent = missing
+    ? `${signedMoney(pnl)} / 持仓 ${account.holdings} 个，缺 ${missing} 个行情`
+    : `${signedMoney(pnl)} / 持仓 ${account.holdings} 个`;
 }
 
 async function loadAccountTodayChange() {
@@ -422,132 +415,54 @@ async function triggerTechPoolUpdate() {
   }
 }
 
-async function uploadHoldings(poolKey, fileInput) {
-  const file = fileInput.files?.[0];
-  if (!file) {
-    setStatus("请先选择 table.xls 持仓文件", "warn");
-    fileInput.click();
+function activeHoldingPool() {
+  return state.config?.account_pools?.[state.activePool] ? state.activePool : null;
+}
+
+function holdingValueWan(row) {
+  const value = Number(row?.["持仓市值"]);
+  return Number.isFinite(value) && value > 0 ? value / 10000 : null;
+}
+
+function setHoldingEditStatus(text, tone = "") {
+  if (!els.holdingEditStatus) return;
+  els.holdingEditStatus.textContent = text;
+  els.holdingEditStatus.className = `muted holding-edit-status ${tone}`;
+}
+
+async function saveManualHolding({ code, name, held, marketValueWan }) {
+  const poolKey = activeHoldingPool();
+  if (!poolKey) {
+    setHoldingEditStatus("活跃科技页不作为独立账户维护持仓", "warn");
     return;
   }
-  setStatus(`正在上传${state.config?.pools?.[poolKey] || poolKey}持仓...`);
+  const value = Number(marketValueWan || 0);
+  if (held && (!Number.isFinite(value) || value <= 0)) {
+    setHoldingEditStatus("\u8bf7\u586b\u5199\u6301\u4ed3\u5e02\u503c\uff0c\u5355\u4f4d\u4e07", "warn");
+    return;
+  }
+  setHoldingEditStatus("正在保存持仓...", "working");
   try {
-    const body = await file.arrayBuffer();
-    const res = await fetch(`/api/holdings/${poolKey}/upload?filename=${encodeURIComponent(file.name)}`, {
+    const res = await fetch(`/api/holdings/${encodeURIComponent(poolKey)}/manual`, {
       method: "POST",
-      headers: { "Content-Type": "application/octet-stream" },
-      body,
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        code,
+        name,
+        held,
+        market_value_wan: held ? value : 0,
+      }),
     });
-    if (!res.ok) throw new Error(await res.text());
-    const result = await res.json();
-    await loadHoldingsStatus();
-    await loadRankings(true);
+    if (!res.ok) throw new Error(await apiErrorMessage(res));
+    const payload = await res.json();
+    state.config.holdings = payload.status;
+    await loadRankings(false);
     await loadAccountTodayChange();
-    if (!state.portfolioCollapsed && (els.portfolioPoolSelect.value === poolKey || els.portfolioPoolSelect.value === "all")) {
-      await loadPortfolioAnalysis();
-    }
-    setStatus(`${state.config.pools[poolKey]}持仓已更新：${result.count} 个标的，${result.updated_at}`, "ok");
+    const action = held ? "已保存" : "已移除";
+    setHoldingEditStatus(`${code} ${action}，仓位已自动重算`, "ok");
   } catch (error) {
-    setStatus(`持仓上传失败：${error.message}`, "error");
-  } finally {
-    fileInput.value = "";
+    setHoldingEditStatus(`持仓保存失败：${error.message}`, "error");
   }
-}
-
-function syncPortfolioPoolWithActiveTab() {
-  if (state.activePool === "a_share" || state.activePool === "global") {
-    els.portfolioPoolSelect.value = state.activePool;
-  } else {
-    els.portfolioPoolSelect.value = "all";
-  }
-}
-
-function setPortfolioCollapsed(collapsed) {
-  state.portfolioCollapsed = collapsed;
-  els.portfolioPanel.classList.toggle("is-collapsed", collapsed);
-  els.portfolioBody.hidden = collapsed;
-  els.portfolioToggleBtn.textContent = collapsed ? "展开" : "收起";
-  els.portfolioToggleBtn.setAttribute("aria-expanded", String(!collapsed));
-}
-
-async function expandPortfolioAndLoad(force = false) {
-  setPortfolioCollapsed(false);
-  if (force || !state.portfolio) {
-    await loadPortfolioAnalysis();
-  }
-}
-
-async function loadPortfolioAnalysis() {
-  const poolKey = els.portfolioPoolSelect.value || "all";
-  els.portfolioRefreshBtn.disabled = true;
-  els.portfolioStatus.textContent = "正在计算行业穿透...";
-  try {
-    const res = await fetch(`/api/portfolio/analysis?pool_key=${encodeURIComponent(poolKey)}`);
-    if (!res.ok) throw new Error(await res.text());
-    state.portfolio = await res.json();
-    renderPortfolio();
-  } catch (error) {
-    els.portfolioStatus.textContent = `组合诊断失败：${error.message}`;
-    els.portfolioMetrics.innerHTML = "";
-    els.portfolioBars.innerHTML = "";
-    els.portfolioDetailBody.innerHTML = "";
-  } finally {
-    els.portfolioRefreshBtn.disabled = false;
-  }
-}
-
-function renderPortfolio() {
-  const payload = state.portfolio;
-  if (!payload || !payload.holdings_count) {
-    els.portfolioStatus.textContent = "暂无可诊断持仓，请先上传对应账户的 table.xls。";
-    els.portfolioMetrics.innerHTML = "";
-    els.portfolioBars.innerHTML = "";
-    els.portfolioDetailBody.innerHTML = "";
-    return;
-  }
-
-  els.portfolioStatus.textContent = `${payload.title}，${payload.generated_at}，行业字典：${payload.source_file}`;
-  els.portfolioMetrics.innerHTML = [
-    ["总市值", fmtMoney(payload.total_value)],
-    ["持仓数", payload.holdings_count],
-    ["已映射", payload.mapped_count],
-    ["未映射", payload.unmapped_count],
-    ["Top3集中度", fmtPct(payload.top3_weight)],
-    ["Top5集中度", fmtPct(payload.top5_weight)],
-  ]
-    .map(([label, value]) => `<div class="portfolio-metric"><span>${label}</span><strong>${value}</strong></div>`)
-    .join("");
-
-  const topIndustries = (payload.primary || []).slice(0, 10);
-  els.portfolioBars.innerHTML = topIndustries
-    .map((row) => {
-      const width = Math.max(2, Math.min(100, Number(row["组合占比"] || 0) * 100));
-      return `
-        <div class="portfolio-bar-row">
-          <div class="portfolio-bar-label">
-            <strong>${row["行业"]}</strong>
-            <span>${fmtMoney(row["穿透金额"])} / ${fmtPct(row["组合占比"])}</span>
-          </div>
-          <div class="portfolio-bar-track"><span style="width:${width}%"></span></div>
-        </div>
-      `;
-    })
-    .join("");
-
-  els.portfolioDetailBody.innerHTML = (payload.details || [])
-    .slice(0, 80)
-    .map(
-      (row) => `
-        <tr>
-          <td>${row["申万一级行业"]}</td>
-          <td>${row["申万二级细分"]}</td>
-          <td>${row["代码"]}</td>
-          <td>${row["名称"]}</td>
-          <td class="numeric">${fmtMoney(row["穿透金额"])}</td>
-          <td class="numeric">${fmtPct(row["组合占比"])}</td>
-        </tr>
-      `,
-    )
-    .join("");
 }
 
 function switchView(view) {
@@ -812,9 +727,6 @@ async function exportBacktestDetails() {
   }
 }
 
-function chooseHoldingsFile(fileInput) {
-  fileInput.click();
-}
 
 async function triggerBackgroundRefresh() {
   if (state.rankingDate) {
@@ -875,7 +787,7 @@ function renderSummary() {
       const holds = rows.filter((row) => row["持仓"]).length;
       const holdStatus = state.config?.holdings?.[key];
       const top = rows[0];
-      const holdText = holdStatus ? `账户 ${holdStatus.count} / ${holdStatus.updated_at || "未上传"}` : `持仓 ${holds}`;
+      const holdText = holdStatus ? `账户 ${holdStatus.count} / ${holdStatus.updated_at || "未维护"}` : `持仓 ${holds}`;
       return `
         <button class="summary-card ${key === state.activePool ? "active" : ""}" type="button" data-pool="${key}">
           <span>${group.title}</span>
@@ -921,6 +833,26 @@ function renderTableBody(rows) {
           const value = row[col.key];
           const numeric = ["number", "percent", "holdPercent", "price", "ratio", "score"].includes(col.type) ? "numeric" : "";
           const sign = col.type === "percent" && Number(value) > 0 ? "positive" : col.type === "percent" && Number(value) < 0 ? "negative" : "";
+          if (col.type === "holdingControl") {
+            const poolKey = activeHoldingPool();
+            const isHeld = Boolean(row["持仓"]);
+            const disabled = poolKey ? "" : "disabled";
+            const action = isHeld ? "remove" : "add";
+            return `<td><button class="holding-toggle-btn ${isHeld ? "is-held" : ""}" type="button" data-action="${action}" data-code="${row["代码"] || ""}" data-name="${row["名称"] || ""}" ${disabled}>${isHeld ? "持有" : "空仓"}</button></td>`;
+          }
+          if (col.type === "holdingValue") {
+            const poolKey = activeHoldingPool();
+            const valueWan = holdingValueWan(row);
+            const disabled = poolKey ? "" : "disabled";
+            const valueText = valueWan === null ? "" : valueWan.toFixed(2);
+            const displayText = valueText || "-";
+            return `<td>
+              <span class="holding-value-cell ${poolKey ? "" : "disabled"}" title="双击编辑" data-code="${row["代码"] || ""}" data-name="${row["名称"] || ""}">
+                <span class="holding-value-display">${displayText}</span>
+                <input class="holding-value-input" type="text" inputmode="decimal" value="${valueText}" data-code="${row["代码"] || ""}" data-name="${row["名称"] || ""}" ${disabled} />
+              </span>
+            </td>`;
+          }
           if (col.key === "评级") {
             return `<td><span class="rating ${ratingClass(value)}">${fmt(value, col.type)}</span></td>`;
           }
@@ -984,6 +916,185 @@ async function showRealtimeRankings() {
   await loadRankings(true);
 }
 
+function parseWanValue(raw) {
+  const normalized = String(raw || "")
+    .replace(/[^0-9.-]/g, "")
+    .trim();
+  const value = Number(normalized || 0);
+  return Number.isFinite(value) ? value : null;
+}
+
+function setRowHoldingVisual(code, held, valueWan = null) {
+  const row = els.tableBody.querySelector(`.holding-toggle-btn[data-code="${code}"]`)?.closest("tr");
+  if (!row) return;
+  row.classList.toggle("holding-row", held);
+  const toggle = row.querySelector(`.holding-toggle-btn[data-code="${code}"]`);
+  if (toggle) {
+    toggle.classList.toggle("is-held", held);
+    toggle.dataset.action = held ? "remove" : "add";
+    toggle.textContent = held ? "\u6301\u6709" : "\u7a7a\u4ed3";
+  }
+  const input = row.querySelector(`.holding-value-input[data-code="${code}"]`);
+  const display = row.querySelector(`.holding-value-cell[data-code="${code}"] .holding-value-display`);
+  if (valueWan !== null) {
+    const text = valueWan > 0 ? valueWan.toFixed(2) : "";
+    if (input) input.value = text;
+    if (display) display.textContent = text || "-";
+  }
+}
+
+function openHoldingValueEditor(input) {
+  const cell = input?.closest(".holding-value-cell");
+  if (!cell || cell.classList.contains("disabled")) return;
+  cell.classList.add("editing");
+  input.focus();
+  input.select();
+}
+
+function updateLocalHoldingState(code, name, held, valueWan) {
+  const poolKey = activeHoldingPool();
+  const group = state.payload?.pools?.[poolKey];
+  if (!poolKey || !group?.rows) return;
+  const accountName = state.config?.account_pools?.[poolKey] || "";
+  const value = Number(valueWan || 0) * 10000;
+  group.rows.forEach((row) => {
+    if (String(row["代码"]).padStart(6, "0") !== String(code).padStart(6, "0")) return;
+    if (held && value > 0) {
+      row["持仓"] = "★ 持有";
+      row["账户"] = accountName;
+      row["持仓市值"] = value;
+    } else {
+      row["持仓"] = "";
+      row["账户"] = "";
+      row["持仓市值"] = null;
+      row["仓位占比"] = null;
+    }
+    if (name && !row["名称"]) row["名称"] = name;
+  });
+  const heldRows = group.rows.filter((row) => row["持仓"] && Number(row["持仓市值"]) > 0);
+  const totalValue = heldRows.reduce((sum, row) => sum + Number(row["持仓市值"] || 0), 0);
+  heldRows.forEach((row) => {
+    row["仓位占比"] = totalValue > 0 ? (Number(row["持仓市值"] || 0) / totalValue) * 100 : null;
+  });
+  if (state.config?.holdings?.[poolKey]) {
+    state.config.holdings[poolKey].count = heldRows.length;
+    state.config.holdings[poolKey].source_file = "manual";
+  }
+  renderSummary();
+  renderOptimisticAccountChange(poolKey);
+}
+
+function renderOptimisticAccountChange(poolKey) {
+  const group = state.payload?.pools?.[poolKey];
+  if (!group?.rows) return;
+  let currentTotal = 0;
+  let previousTotal = 0;
+  let todayPnl = 0;
+  let covered = 0;
+  let holdings = 0;
+  group.rows.forEach((row) => {
+    if (!row["持仓"]) return;
+    const currentValue = Number(row["持仓市值"] || 0);
+    if (!Number.isFinite(currentValue) || currentValue <= 0) return;
+    holdings += 1;
+    currentTotal += currentValue;
+    const ret = Number(row["当日涨跌幅"]);
+    if (Number.isFinite(ret) && ret > -0.999) {
+      const previousValue = currentValue / (1 + ret);
+      previousTotal += previousValue;
+      todayPnl += currentValue - previousValue;
+      covered += 1;
+    }
+  });
+  const account = {
+    holdings,
+    covered,
+    total_value: currentTotal,
+    previous_value: previousTotal,
+    today_pnl: previousTotal > 0 ? todayPnl : null,
+    return_1d: previousTotal > 0 ? todayPnl / previousTotal : null,
+  };
+  if (poolKey === "a_share") setAccountChangeNode(els.aShareTodayChange, els.aShareTodayPnl, account);
+  if (poolKey === "global") setAccountChangeNode(els.globalTodayChange, els.globalTodayPnl, account);
+}
+
+async function saveHoldingValueInput(input) {
+  const value = parseWanValue(input.value);
+  if (value === null || value < 0) {
+    setHoldingEditStatus("\u8bf7\u8f93\u5165\u6709\u6548\u7684\u6301\u4ed3\u5e02\u503c\uff0c\u5355\u4f4d\u4e07", "warn");
+    input.focus();
+    return;
+  }
+  input.closest(".holding-value-cell")?.classList.remove("editing");
+  setRowHoldingVisual(input.dataset.code, value > 0, value);
+  updateLocalHoldingState(input.dataset.code, input.dataset.name, value > 0, value);
+  await saveManualHolding({
+    code: input.dataset.code,
+    name: input.dataset.name,
+    held: value > 0,
+    marketValueWan: value,
+  });
+}
+
+document.addEventListener("keydown", async (event) => {
+  const input = event.target.closest(".holding-value-input");
+  if (!input) return;
+  if (event.key === "Enter") {
+    event.preventDefault();
+    input.blur();
+  }
+  if (event.key === "Escape") {
+    event.preventDefault();
+    const wrapper = input.closest(".holding-value-cell");
+    const display = wrapper?.querySelector(".holding-value-display")?.textContent || "";
+    input.value = display === "-" ? "" : display;
+    wrapper?.classList.remove("editing");
+  }
+});
+
+document.addEventListener("focusout", async (event) => {
+  const input = event.target.closest(".holding-value-input");
+  if (!input) return;
+  await saveHoldingValueInput(input);
+});
+
+document.addEventListener("dblclick", (event) => {
+  const cell = event.target.closest(".holding-value-cell");
+  if (!cell || cell.classList.contains("disabled")) return;
+  openHoldingValueEditor(cell.querySelector(".holding-value-input"));
+});
+
+document.addEventListener("click", async (event) => {
+  const toggle = event.target.closest(".holding-toggle-btn");
+  if (!toggle) return;
+  const input = els.tableBody.querySelector(`.holding-value-input[data-code="${toggle.dataset.code}"]`);
+  if (toggle.dataset.action === "remove") {
+    setRowHoldingVisual(toggle.dataset.code, false, 0);
+    updateLocalHoldingState(toggle.dataset.code, toggle.dataset.name, false, 0);
+    await saveManualHolding({
+      code: toggle.dataset.code,
+      name: toggle.dataset.name,
+      held: false,
+      marketValueWan: 0,
+    });
+    return;
+  }
+  const value = parseWanValue(input?.value);
+  if (value === null || value <= 0) {
+    openHoldingValueEditor(input);
+    setHoldingEditStatus("\u8bf7\u586b\u5199\u6301\u4ed3\u5e02\u503c\uff0c\u5355\u4f4d\u4e07", "warn");
+    return;
+  }
+  setRowHoldingVisual(toggle.dataset.code, true, value);
+  updateLocalHoldingState(toggle.dataset.code, toggle.dataset.name, true, value);
+  await saveManualHolding({
+    code: toggle.dataset.code,
+    name: toggle.dataset.name,
+    held: true,
+    marketValueWan: value,
+  });
+});
+
 document.addEventListener("click", (event) => {
   const viewTab = event.target.closest("[data-view]");
   if (viewTab) {
@@ -993,16 +1104,11 @@ document.addEventListener("click", (event) => {
   const tab = event.target.closest("[data-pool]");
   if (tab) {
     state.activePool = tab.dataset.pool;
-    syncPortfolioPoolWithActiveTab();
-    state.portfolio = null;
     if (els.backtestPoolSelect.querySelector(`option[value="${state.activePool}"]`)) {
       els.backtestPoolSelect.value = state.activePool;
       invalidateBacktestExport();
     }
     render();
-    if (!state.portfolioCollapsed) {
-      loadPortfolioAnalysis();
-    }
     return;
   }
   const th = event.target.closest("th[data-sort]");
@@ -1022,19 +1128,6 @@ els.historyRankingBtn.addEventListener("click", () => showHistoricalRankings());
 els.liveRankingBtn.addEventListener("click", () => showRealtimeRankings());
 els.cacheBtn.addEventListener("click", () => triggerCacheUpdate());
 els.techPoolBtn.addEventListener("click", () => triggerTechPoolUpdate());
-els.aShareHoldBtn.addEventListener("click", () => chooseHoldingsFile(els.aShareHoldFile));
-els.globalHoldBtn.addEventListener("click", () => chooseHoldingsFile(els.globalHoldFile));
-els.aShareHoldFile.addEventListener("change", () => uploadHoldings("a_share", els.aShareHoldFile));
-els.globalHoldFile.addEventListener("change", () => uploadHoldings("global", els.globalHoldFile));
-els.portfolioPoolSelect.addEventListener("change", () => {
-  state.portfolio = null;
-  if (!state.portfolioCollapsed) loadPortfolioAnalysis();
-});
-els.portfolioToggleBtn.addEventListener("click", () => {
-  if (state.portfolioCollapsed) expandPortfolioAndLoad(false);
-  else setPortfolioCollapsed(true);
-});
-els.portfolioRefreshBtn.addEventListener("click", () => expandPortfolioAndLoad(true));
 els.sourceSelect.addEventListener("change", () => loadRankings(true));
 els.strategySelect.addEventListener("change", () => {
   state.strategyId = els.strategySelect.value;
@@ -1079,8 +1172,6 @@ els.autoRefresh.addEventListener("change", resetTimer);
     await loadHoldingsStatus();
     await loadRankings(false);
     await loadAccountTodayChange();
-    syncPortfolioPoolWithActiveTab();
-    setPortfolioCollapsed(true);
     resetTimer();
   } catch (error) {
     setStatus(`初始化失败：${error.message}`, "error");

@@ -3,7 +3,7 @@ from __future__ import annotations
 from datetime import date, datetime
 from io import BytesIO
 
-from fastapi import BackgroundTasks, FastAPI, HTTPException, Request
+from fastapi import BackgroundTasks, FastAPI, HTTPException
 from fastapi.responses import FileResponse, Response, StreamingResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
@@ -26,10 +26,9 @@ from .config import (
     ROOT,
     STATIC_DIR,
 )
-from .portfolio import analyze_portfolio
 from .ranking import build_rankings
 from .scoring import list_scoring_strategies
-from .storage import cache_stats, holdings_status, parse_holdings_text, save_account_holdings
+from .storage import cache_stats, holdings_status, save_manual_holding
 from .tech_discovery import tech_pool_status, update_tech_pool_state
 from .utils import module_available, now_iso
 
@@ -46,6 +45,13 @@ class BacktestRequest(BaseModel):
     initial_capital: float = Field(default=200000.0, gt=0)
     benchmark_code: str = "510300"
     execution_mode: str = "next_open"
+
+
+class ManualHoldingRequest(BaseModel):
+    code: str
+    name: str | None = None
+    held: bool = True
+    market_value_wan: float | None = Field(default=None, ge=0)
 
 
 def _state_error(payload: dict) -> str | None:
@@ -250,27 +256,20 @@ def accounts_today_change(source: str = DEFAULT_SOURCE):
         raise HTTPException(status_code=400, detail=str(exc)) from exc
 
 
-@app.post("/api/holdings/{pool_key}/upload")
-async def upload_holdings(pool_key: str, request: Request, filename: str | None = None):
-    if pool_key not in ACCOUNT_POOL_KEYS:
-        raise HTTPException(status_code=400, detail="只支持 a_share/global 两个账户")
-    content = await request.body()
-    if not content:
-        raise HTTPException(status_code=400, detail="上传文件为空")
-    rows = parse_holdings_text(content)
-    if not rows:
-        raise HTTPException(status_code=400, detail="未解析到 6 位证券代码持仓")
-    result = save_account_holdings(pool_key, rows, source_file=filename)
-    clear_payload()
-    return result
-
-
-@app.get("/api/portfolio/analysis")
-def portfolio_view_api(pool_key: str = "all"):
+@app.post("/api/holdings/{pool_key}/manual")
+def manual_holding_api(pool_key: str, payload: ManualHoldingRequest):
     try:
-        return analyze_portfolio(pool_key)
+        result = save_manual_holding(
+            pool_key=pool_key,
+            code=payload.code,
+            name=payload.name,
+            market_value_wan=payload.market_value_wan,
+            held=payload.held,
+        )
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
+    clear_payload()
+    return {**result, "status": holdings_status()}
 
 
 @app.get("/api/tech-pool/status")

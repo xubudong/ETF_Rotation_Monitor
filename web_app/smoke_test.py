@@ -2,7 +2,6 @@ from __future__ import annotations
 
 from web_app.account_change import account_today_change
 from web_app.pools import load_legacy_hold_pool, load_pool_definitions
-from web_app.portfolio import analyze_portfolio, analyze_portfolio_rows
 from web_app.ranking import build_rankings
 
 
@@ -10,10 +9,13 @@ REQUIRED_ROW_KEYS = {
     "代码",
     "名称",
     "持仓",
+    "持仓市值",
     "板块",
     "评级",
     "最新收盘价",
     "当日涨跌幅",
+    "MA15",
+    "价格>MA15",
     "MA20",
     "价格>MA20",
     "20日涨幅",
@@ -47,19 +49,6 @@ def main() -> None:
 
     counts = {key: len(value["rows"]) for key, value in payload["pools"].items()}
 
-    sample_portfolio = analyze_portfolio_rows(
-        [
-            {"code": "161226", "name": "白银基金", "market_value": 10000, "accounts": "测试账户"},
-            {"code": "562500", "name": "机器人ETF", "market_value": 20000, "accounts": "测试账户"},
-        ],
-        pool_key="all",
-    )
-    assert sample_portfolio["holdings_count"] == 2
-    assert sample_portfolio["primary"]
-
-    live_portfolio = analyze_portfolio("all")
-    assert "primary" in live_portfolio
-
     today_change = account_today_change(source="tencent")
     assert set(today_change["accounts"]) == {"a_share", "global"}
 
@@ -68,7 +57,6 @@ def main() -> None:
             "ok": True,
             "source": payload["source"],
             "counts": counts,
-            "portfolio_rows": len(live_portfolio["primary"]),
             "account_change": {
                 key: value["return_1d"] for key, value in today_change["accounts"].items()
             },

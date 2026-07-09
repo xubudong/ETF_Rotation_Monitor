@@ -92,10 +92,7 @@
             <input id="buyOnly" type="checkbox" />
             <span>仅买入</span>
           </label>
-          <input id="aShareHoldFile" class="file-input" type="file" accept=".xls,.txt,.csv" />
-          <button id="aShareHoldBtn" type="button">更新A股持仓</button>
-          <input id="globalHoldFile" class="file-input" type="file" accept=".xls,.txt,.csv" />
-          <button id="globalHoldBtn" type="button">更新全球持仓</button>
+          <div id="holdingEditStatus" class="muted holding-edit-status"></div>
         </div>
       </section>
 
@@ -106,48 +103,6 @@
 
       <div id="monitorView" class="view-panel active">
         <section class="summary-grid" id="summaryGrid"></section>
-
-        <section class="portfolio-panel is-collapsed">
-          <div class="portfolio-header">
-            <div>
-              <h2>组合诊断</h2>
-              <div id="portfolioStatus" class="muted">等待持仓数据...</div>
-            </div>
-            <div class="portfolio-actions">
-              <label class="field">
-                <span>诊断账户</span>
-                <select id="portfolioPoolSelect">
-                  <option value="a_share">A 股板块轮动</option>
-                  <option value="global">全球与大宗配置</option>
-                  <option value="all">全部账户</option>
-                </select>
-              </label>
-              <button id="portfolioToggleBtn" class="portfolio-toggle" type="button" aria-expanded="false" aria-controls="portfolioBody">展开</button>
-              <button id="portfolioRefreshBtn" type="button">刷新诊断</button>
-            </div>
-          </div>
-          <div id="portfolioBody" class="portfolio-body" hidden>
-            <div id="portfolioMetrics" class="portfolio-metrics"></div>
-            <div class="portfolio-content">
-              <div id="portfolioBars" class="portfolio-bars"></div>
-              <div class="portfolio-detail-wrap">
-                <table class="portfolio-detail-table">
-                  <thead>
-                    <tr>
-                      <th>一级行业</th>
-                      <th>二级细分</th>
-                      <th>代码</th>
-                      <th>名称</th>
-                      <th>穿透金额</th>
-                      <th>占比</th>
-                    </tr>
-                  </thead>
-                  <tbody id="portfolioDetailBody"></tbody>
-                </table>
-              </div>
-            </div>
-          </div>
-        </section>
 
         <section class="table-panel">
           <div class="table-header">

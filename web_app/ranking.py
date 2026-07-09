@@ -121,6 +121,7 @@ def historical_score_pool(
                     "持仓": holding.get("持仓", ""),
                     "账户": holding.get("账户", ""),
                     "仓位占比": holding.get("仓位占比"),
+                    "持仓市值": holding.get("持仓市值"),
                     "板块": get_category(name),
                     "最新收盘价": latest["close"],
                     "当日涨跌幅": latest["return_1d"],
@@ -165,7 +166,7 @@ def historical_score_pool(
 
 def _select_score_columns(scored: pd.DataFrame) -> list[dict[str, Any]]:
     columns = [
-        "代码", "名称", "持仓", "账户", "仓位占比", "板块", "昨日排名", "排名变化",
+        "代码", "名称", "持仓", "账户", "仓位占比", "持仓市值", "板块", "昨日排名", "排名变化",
         "动态预警", "评级", "最新收盘价", "当日涨跌幅", "MA15", "价格>MA15", "MA20", "价格>MA20",
         "20日涨幅", "量比", "动量得分", "量能得分", "趋势得分", "综合总分",
     ]
@@ -209,6 +210,7 @@ def score_pool(
                     "持仓": holding.get("持仓", ""),
                     "账户": holding.get("账户", ""),
                     "仓位占比": holding.get("仓位占比"),
+                    "持仓市值": holding.get("持仓市值"),
                     "板块": get_category(name),
                     "最新收盘价": latest["close"],
                     "当日涨跌幅": latest_return_1d,

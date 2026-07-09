@@ -6,7 +6,7 @@ from typing import Any
 import pandas as pd
 
 from .config import ACCOUNT_POOL_KEYS, CACHE_DB, CACHE_DIR, DATA_DIR, POOL_SPECS
-from .pools import all_unique_etfs, load_legacy_hold_pool
+from .pools import all_unique_etfs
 from .utils import now_iso
 
 
@@ -209,10 +209,73 @@ def save_account_holdings(pool_key: str, holdings: list[dict[str, Any]], source_
     return {"pool_key": pool_key, "count": len(holdings), "updated_at": updated_at, "source_file": source_file}
 
 
+def _recalculate_holding_weights(conn: sqlite3.Connection, pool_key: str) -> None:
+    total = conn.execute(
+        "SELECT COALESCE(SUM(market_value), 0) AS total FROM account_holdings WHERE pool_key = ?",
+        (pool_key,),
+    ).fetchone()[0]
+    if total and float(total) > 0:
+        conn.execute(
+            "UPDATE account_holdings SET weight_pct = market_value / ? * 100 WHERE pool_key = ?",
+            (float(total), pool_key),
+        )
+    else:
+        conn.execute("UPDATE account_holdings SET weight_pct = NULL WHERE pool_key = ?", (pool_key,))
+
+
+def save_manual_holding(
+    pool_key: str,
+    code: str,
+    name: str | None,
+    market_value_wan: float | None,
+    held: bool = True,
+) -> dict[str, Any]:
+    if pool_key not in ACCOUNT_POOL_KEYS:
+        raise ValueError("只支持 A 股板块轮动 和 全球与大宗配置 两个账户维护持仓")
+    normalized_code = str(code).strip().zfill(6)
+    if not normalized_code.isdigit() or len(normalized_code) != 6:
+        raise ValueError("证券代码必须是 6 位数字")
+    value_wan = float(market_value_wan or 0)
+    if value_wan < 0:
+        raise ValueError("持仓市值不能为负数")
+
+    init_cache_db()
+    updated_at = now_iso()
+    with sqlite3.connect(CACHE_DB) as conn:
+        if not held or value_wan <= 0:
+            conn.execute("DELETE FROM account_holdings WHERE pool_key = ? AND code = ?", (pool_key, normalized_code))
+            action = "deleted"
+        else:
+            conn.execute(
+                """
+                INSERT INTO account_holdings (
+                    pool_key, code, name, shares, market_value, cost_price, current_price,
+                    pnl, pnl_pct, weight_pct, source_file, updated_at
+                )
+                VALUES (?, ?, ?, NULL, ?, NULL, NULL, NULL, NULL, NULL, 'manual', ?)
+                ON CONFLICT(pool_key, code) DO UPDATE SET
+                    name = excluded.name,
+                    shares = NULL,
+                    market_value = excluded.market_value,
+                    cost_price = NULL,
+                    current_price = NULL,
+                    pnl = NULL,
+                    pnl_pct = NULL,
+                    source_file = 'manual',
+                    updated_at = excluded.updated_at
+                """,
+                (pool_key, normalized_code, name or normalized_code, value_wan * 10000, updated_at),
+            )
+            action = "saved"
+        _recalculate_holding_weights(conn, pool_key)
+        conn.execute("INSERT OR REPLACE INTO cache_meta (key, value) VALUES (?, ?)", (f"holdings:{pool_key}:updated_at", updated_at))
+        conn.execute("INSERT OR REPLACE INTO cache_meta (key, value) VALUES (?, ?)", (f"holdings:{pool_key}:source_file", "manual"))
+        count = conn.execute("SELECT COUNT(*) FROM account_holdings WHERE pool_key = ?", (pool_key,)).fetchone()[0]
+    return {"pool_key": pool_key, "code": normalized_code, "action": action, "count": count, "updated_at": updated_at}
+
+
 def load_account_holdings(pool_key: str | None = None) -> dict[str, dict[str, Any]]:
     if not CACHE_DB.exists():
-        if pool_key in (None, "a_share"):
-            return {code: {"code": code, "持仓": "★ 持有", "账户": "A 股板块轮动"} for code in load_legacy_hold_pool()}
         return {}
     init_cache_db()
     query = "SELECT * FROM account_holdings"
@@ -241,8 +304,6 @@ def load_account_holdings(pool_key: str | None = None) -> dict[str, dict[str, An
             "仓位占比": row["weight_pct"],
             "持仓更新时间": row["updated_at"],
         }
-    if not result and pool_key == "a_share":
-        return {code: {"code": code, "持仓": "★ 持有", "账户": POOL_SPECS["a_share"]["title"]} for code in load_legacy_hold_pool()}
     return result
 
 
