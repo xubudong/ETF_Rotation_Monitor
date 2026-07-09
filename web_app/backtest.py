@@ -93,6 +93,7 @@ def _row_for_scoring(code: str, name: str, row: pd.Series) -> dict[str, Any]:
         "代码": code,
         "名称": name,
         "最新收盘价": row["close"],
+        "MA15": row["MA15"],
         "MA20": row["MA20"],
         "MA60": row["MA60"],
         "20日涨幅": row["return_20d"],

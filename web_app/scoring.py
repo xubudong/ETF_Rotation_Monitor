@@ -30,6 +30,7 @@ def get_category(name: str) -> str:
 
 def calculate_indicators(df: pd.DataFrame) -> pd.DataFrame:
     df = df.copy()
+    df["MA15"] = df["close"].rolling(window=15).mean()
     df["MA20"] = df["close"].rolling(window=20).mean()
     df["MA60"] = df["close"].rolling(window=60).mean()
     df["return_20d"] = df["close"].pct_change(periods=20, fill_method=None)
@@ -232,6 +233,8 @@ def cross_sectional_score_and_rate(
 
     strategy = _strategy_with_runtime_overrides(get_strategy_config(strategy_id), runtime_overrides)
     score_df = cross_df.copy()
+    if "MA15" not in score_df.columns:
+        score_df["MA15"] = np.nan
     momentum_weight = float(strategy.get("momentum_weight", 50))
 
     score_df["量能得分"] = calc_vol_price_scores(score_df, strategy)
@@ -240,6 +243,7 @@ def cross_sectional_score_and_rate(
     score_df["综合总分"] = score_df["动量得分"] + score_df["量能得分"] + score_df["趋势得分"]
     score_df = score_df.sort_values(by="综合总分", ascending=False).reset_index(drop=True)
     score_df = apply_trade_decisions(score_df, strategy)
+    score_df["价格>MA15"] = np.where(score_df["最新收盘价"] > score_df["MA15"], "是", "否")
     score_df["价格>MA20"] = np.where(score_df["最新收盘价"] > score_df["MA20"], "是", "否")
     score_df["策略"] = strategy.get("name", strategy.get("id", ""))
     if runtime_overrides:

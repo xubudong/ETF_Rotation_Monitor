@@ -693,6 +693,67 @@ td.numeric {
   font-weight: 700;
 }
 
+.ma-chip {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 34px;
+  min-height: 24px;
+  padding: 0 8px;
+  border-radius: 999px;
+  border: 1px solid transparent;
+  font-weight: 800;
+}
+
+.ma-yes {
+  border-color: #8fd7ad;
+  background: #daf6e6;
+  color: var(--green);
+}
+
+.ma-no {
+  border-color: #f0aaa3;
+  background: #ffe1df;
+  color: var(--red);
+}
+
+.ma-neutral {
+  background: var(--chip);
+  color: var(--muted);
+}
+
+.rank-frame.rank-top8 td:first-child {
+  border-left: 2px solid #1d5fd1;
+}
+
+.rank-frame.rank-top8 td:last-child {
+  border-right: 2px solid #1d5fd1;
+}
+
+.rank-frame.rank-top8.rank-frame-start td {
+  border-top: 2px solid #1d5fd1;
+}
+
+.rank-frame.rank-top8.rank-frame-end td {
+  border-bottom: 2px solid #1d5fd1;
+}
+
+.rank-frame.rank-top12 td:first-child {
+  border-left: 2px solid #d39b16;
+}
+
+.rank-frame.rank-top12 td:last-child {
+  border-right: 2px solid #d39b16;
+}
+
+.rank-frame.rank-top12.rank-frame-start td {
+  border-top: 2px solid #d39b16;
+}
+
+.rank-frame.rank-top12.rank-frame-end td {
+  border-bottom: 2px solid #d39b16;
+}
+
 @media (max-width: 900px) {
   .app-shell {
     width: min(100vw - 20px, 1560px);

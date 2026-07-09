@@ -12,6 +12,8 @@ const columns = [
   { key: "评级", label: "评级", type: "text" },
   { key: "最新收盘价", label: "最新价", type: "price" },
   { key: "当日涨跌幅", label: "当日涨跌", type: "percent" },
+  { key: "MA15", label: "MA15", type: "price" },
+  { key: "价格>MA15", label: ">MA15", type: "text" },
   { key: "MA20", label: "MA20", type: "price" },
   { key: "价格>MA20", label: ">MA20", type: "text" },
   { key: "20日涨幅", label: "20日涨幅", type: "percent" },
@@ -896,9 +898,24 @@ function renderTableHead() {
 }
 
 function renderTableBody(rows) {
+  const rankGroup = (item) => {
+    const rank = Number(item?.["排名"]);
+    if (!Number.isFinite(rank)) return "";
+    if (rank <= 8) return "rank-top8";
+    if (rank <= 12) return "rank-top12";
+    return "";
+  };
   els.tableBody.innerHTML = rows
-    .map((row) => {
-      const trClass = row["持仓"] ? "holding-row" : "";
+    .map((row, index) => {
+      const groupClass = rankGroup(row);
+      const trClasses = [];
+      if (row["持仓"]) trClasses.push("holding-row");
+      if (groupClass) {
+        trClasses.push("rank-frame", groupClass);
+        if (rankGroup(rows[index - 1]) !== groupClass) trClasses.push("rank-frame-start");
+        if (rankGroup(rows[index + 1]) !== groupClass) trClasses.push("rank-frame-end");
+      }
+      const trClass = trClasses.join(" ");
       const cells = columns
         .map((col) => {
           const value = row[col.key];
@@ -909,6 +926,10 @@ function renderTableBody(rows) {
           }
           if (col.key === "动态预警" && value) {
             return `<td><span class="alert-chip">${fmt(value, col.type)}</span></td>`;
+          }
+          if (col.key === "价格>MA15" || col.key === "价格>MA20") {
+            const maClass = value === "是" ? "ma-yes" : value === "否" ? "ma-no" : "ma-neutral";
+            return `<td><span class="ma-chip ${maClass}">${fmt(value, col.type)}</span></td>`;
           }
           return `<td class="${numeric} ${sign}">${fmt(value, col.type)}</td>`;
         })

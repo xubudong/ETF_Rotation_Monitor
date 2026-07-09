@@ -76,6 +76,7 @@ def previous_rank_map(
                     "代码": code,
                     "名称": name,
                     "最新收盘价": row["close"],
+                    "MA15": row["MA15"],
                     "MA20": row["MA20"],
                     "MA60": row["MA60"],
                     "20日涨幅": row["return_20d"],
@@ -123,6 +124,7 @@ def historical_score_pool(
                     "板块": get_category(name),
                     "最新收盘价": latest["close"],
                     "当日涨跌幅": latest["return_1d"],
+                    "MA15": latest["MA15"],
                     "MA20": latest["MA20"],
                     "MA60": latest["MA60"],
                     "20日涨幅": latest["return_20d"],
@@ -164,7 +166,7 @@ def historical_score_pool(
 def _select_score_columns(scored: pd.DataFrame) -> list[dict[str, Any]]:
     columns = [
         "代码", "名称", "持仓", "账户", "仓位占比", "板块", "昨日排名", "排名变化",
-        "动态预警", "评级", "最新收盘价", "当日涨跌幅", "MA20", "价格>MA20",
+        "动态预警", "评级", "最新收盘价", "当日涨跌幅", "MA15", "价格>MA15", "MA20", "价格>MA20",
         "20日涨幅", "量比", "动量得分", "量能得分", "趋势得分", "综合总分",
     ]
     columns = [col for col in columns if col in scored.columns]
@@ -210,6 +212,7 @@ def score_pool(
                     "板块": get_category(name),
                     "最新收盘价": latest["close"],
                     "当日涨跌幅": latest_return_1d,
+                    "MA15": latest["MA15"],
                     "MA20": latest["MA20"],
                     "MA60": latest["MA60"],
                     "20日涨幅": latest["return_20d"],
