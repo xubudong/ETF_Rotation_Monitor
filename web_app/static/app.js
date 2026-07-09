@@ -13,8 +13,10 @@ const columns = [
   { key: "评级", label: "评级", type: "text" },
   { key: "最新收盘价", label: "最新价", type: "price" },
   { key: "当日涨跌幅", label: "当日涨跌", type: "percent" },
-  { key: "MA15", label: "MA15", type: "price" },
-  { key: "价格>MA15", label: ">MA15", type: "text" },
+  { key: "MA5", label: "MA5", type: "price", optional: true },
+  { key: "价格>MA5", label: ">MA5", type: "text", optional: true },
+  { key: "MA15", label: "MA15", type: "price", optional: true },
+  { key: "价格>MA15", label: ">MA15", type: "text", optional: true },
   { key: "MA20", label: "MA20", type: "price" },
   { key: "价格>MA20", label: ">MA20", type: "text" },
   { key: "20日涨幅", label: "20日涨幅", type: "percent" },
@@ -36,6 +38,11 @@ const state = {
   sortKey: "综合总分",
   sortDir: "desc",
   timer: null,
+  noteDirty: false,
+  noteSaving: false,
+  noteLastKey: "",
+  noteEntries: [],
+  visibleColumns: null,
 };
 
 const els = {
@@ -66,7 +73,15 @@ const els = {
   ratingFilter: document.querySelector("#ratingFilter"),
   holdOnly: document.querySelector("#holdOnly"),
   buyOnly: document.querySelector("#buyOnly"),
+  columnOptions: document.querySelector("#columnOptions"),
   holdingEditStatus: document.querySelector("#holdingEditStatus"),
+  noteScope: document.querySelector("#noteScope"),
+  noteDate: document.querySelector("#noteDate"),
+  noteDateList: document.querySelector("#noteDateList"),
+  marketNote: document.querySelector("#marketNote"),
+  noteStatus: document.querySelector("#noteStatus"),
+  noteTodayBtn: document.querySelector("#noteTodayBtn"),
+  noteSaveBtn: document.querySelector("#noteSaveBtn"),
   summaryGrid: document.querySelector("#summaryGrid"),
   backtestPoolSelect: document.querySelector("#backtestPoolSelect"),
   backtestStrategySelect: document.querySelector("#backtestStrategySelect"),
@@ -88,6 +103,38 @@ const els = {
   tableHead: document.querySelector("#tableHead"),
   tableBody: document.querySelector("#tableBody"),
 };
+
+const COLUMN_STORAGE_KEY = "etf.monitor.visibleColumns.v1";
+const defaultVisibleColumnKeys = columns.filter((col) => !col.optional).map((col) => col.key);
+
+function loadVisibleColumns() {
+  try {
+    const saved = JSON.parse(localStorage.getItem(COLUMN_STORAGE_KEY) || "null");
+    if (Array.isArray(saved) && saved.length) {
+      const known = new Set(columns.map((col) => col.key));
+      const filtered = saved.filter((key) => known.has(key));
+      if (filtered.length) return filtered;
+    }
+  } catch {}
+  return [...defaultVisibleColumnKeys];
+}
+
+function saveVisibleColumns() {
+  localStorage.setItem(COLUMN_STORAGE_KEY, JSON.stringify(state.visibleColumns || defaultVisibleColumnKeys));
+}
+
+function visibleColumns() {
+  const visible = new Set(state.visibleColumns || defaultVisibleColumnKeys);
+  return columns.filter((col) => visible.has(col.key));
+}
+
+function renderColumnEditor() {
+  if (!els.columnOptions) return;
+  const visible = new Set(state.visibleColumns || defaultVisibleColumnKeys);
+  els.columnOptions.innerHTML = columns
+    .map((col) => `<label class="column-option"><input type="checkbox" value="${col.key}" ${visible.has(col.key) ? "checked" : ""} /> <span>${col.label}</span></label>`)
+    .join("");
+}
 
 function fmt(value, type) {
   if (value === null || value === undefined || value === "") return "-";
@@ -248,13 +295,14 @@ function setAccountChangeNode(changeEl, pnlEl, account) {
   changeEl.textContent = signedPct(ret);
   changeEl.className = Number(ret) > 0 ? "positive" : Number(ret) < 0 ? "negative" : "";
   if (!account?.holdings) {
-    pnlEl.textContent = "暂无持仓";
+    pnlEl.textContent = "\u6682\u65e0\u6301\u4ed3";
     return;
   }
   const missing = Math.max(Number(account.holdings || 0) - Number(account.covered || 0), 0);
+  const totalText = account.total_value ? ` / \u603b\u5e02\u503c ${fmtMoney(account.total_value)}` : "";
   pnlEl.textContent = missing
-    ? `${signedMoney(pnl)} / 持仓 ${account.holdings} 个，缺 ${missing} 个行情`
-    : `${signedMoney(pnl)} / 持仓 ${account.holdings} 个`;
+    ? `${signedMoney(pnl)}${totalText} / \u6301\u4ed3 ${account.holdings} \u4e2a\uff0c\u7f3a ${missing} \u4e2a\u884c\u60c5`
+    : `${signedMoney(pnl)}${totalText} / \u6301\u4ed3 ${account.holdings} \u4e2a`;
 }
 
 async function loadAccountTodayChange() {
@@ -801,7 +849,7 @@ function renderSummary() {
 }
 
 function renderTableHead() {
-  els.tableHead.innerHTML = columns
+  els.tableHead.innerHTML = visibleColumns()
     .map((col) => {
       const active = col.key === state.sortKey ? `sorted ${state.sortDir}` : "";
       return `<th class="${active}" data-sort="${col.key}">${col.label}</th>`;
@@ -828,7 +876,7 @@ function renderTableBody(rows) {
         if (rankGroup(rows[index + 1]) !== groupClass) trClasses.push("rank-frame-end");
       }
       const trClass = trClasses.join(" ");
-      const cells = columns
+      const cells = visibleColumns()
         .map((col) => {
           const value = row[col.key];
           const numeric = ["number", "percent", "holdPercent", "price", "ratio", "score"].includes(col.type) ? "numeric" : "";
@@ -859,7 +907,7 @@ function renderTableBody(rows) {
           if (col.key === "动态预警" && value) {
             return `<td><span class="alert-chip">${fmt(value, col.type)}</span></td>`;
           }
-          if (col.key === "价格>MA15" || col.key === "价格>MA20") {
+          if (col.key === "价格>MA5" || col.key === "价格>MA15" || col.key === "价格>MA20") {
             const maClass = value === "是" ? "ma-yes" : value === "否" ? "ma-no" : "ma-neutral";
             return `<td><span class="ma-chip ${maClass}">${fmt(value, col.type)}</span></td>`;
           }
@@ -880,6 +928,145 @@ function render() {
   els.tableTitle.textContent = group?.title || "排名";
   els.rowCount.textContent = `${rows.length} 条`;
   renderTableBody(rows);
+}
+
+function todayText() {
+  return new Date().toLocaleDateString("sv-SE", { timeZone: "Asia/Shanghai" });
+}
+
+function noteDate() {
+  return els.noteDate?.value || todayText();
+}
+
+function noteKey() {
+  return noteDate();
+}
+
+function escapeHtml(value) {
+  return String(value ?? "")
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#39;");
+}
+
+function setNoteStatus(message = "", type = "") {
+  if (!els.noteStatus) return;
+  els.noteStatus.textContent = message;
+  els.noteStatus.className = `muted note-status ${type}`.trim();
+}
+
+function renderNoteScope() {
+  if (els.noteScope) els.noteScope.textContent = noteDate() === todayText() ? "\u4eca\u65e5" : noteDate();
+}
+
+function noteDateLabel(dateText) {
+  if (dateText === todayText()) return "\u4eca\u65e5";
+  const parts = String(dateText || "").split("-");
+  return parts.length === 3 ? `${parts[1]}/${parts[2]}` : dateText;
+}
+
+function noteLongDateLabel(dateText) {
+  const parts = String(dateText || "").split("-");
+  return parts.length === 3 ? `${parts[0]}/${parts[1]}/${parts[2]}` : dateText;
+}
+
+function noteTimeLabel(value) {
+  if (!value) return "";
+  const text = String(value).replace("T", " ");
+  return text.length > 16 ? text.slice(0, 16) : text;
+}
+
+function renderNoteDateList() {
+  if (!els.noteDateList) return;
+  const current = noteDate();
+  const entries = [...state.noteEntries];
+  if (!entries.some((item) => item.note_date === current)) {
+    entries.unshift({ note_date: current, content: "", updated_at: null });
+  }
+  if (!entries.some((item) => item.note_date === todayText())) {
+    entries.unshift({ note_date: todayText(), content: "", updated_at: null });
+  }
+  const seen = new Set();
+  const uniqueEntries = entries.filter((item) => {
+    if (!item?.note_date || seen.has(item.note_date)) return false;
+    seen.add(item.note_date);
+    return true;
+  });
+  els.noteDateList.innerHTML = uniqueEntries.length
+    ? uniqueEntries
+        .map((item) => {
+          const dateText = item.note_date;
+          const classes = ["note-card"];
+          if (dateText === current) classes.push("active");
+          if (dateText === todayText()) classes.push("today");
+          const body = item.content?.trim() || "\u8fd9\u5929\u8fd8\u6ca1\u6709\u8bb0\u5f55";
+          return `<button class="${classes.join(" ")}" type="button" data-note-date="${escapeHtml(dateText)}" title="${escapeHtml(dateText)}">
+            <span class="note-card-date">${escapeHtml(noteLongDateLabel(dateText))}</span>
+            <span class="note-card-time">${escapeHtml(item.updated_at ? `\u66f4\u65b0 ${noteTimeLabel(item.updated_at)}` : "\u672a\u8bb0\u5f55")}</span>
+            <span class="note-card-body">${escapeHtml(body)}</span>
+          </button>`;
+        })
+        .join("")
+    : `<div class="note-empty">\u6682\u65e0\u7814\u7a76\u65e5\u5fd7</div>`;
+}
+
+async function loadMarketNoteDates() {
+  try {
+    const response = await fetch(`/api/notes/recent?limit=30`);
+    if (!response.ok) throw new Error(await response.text());
+    const payload = await response.json();
+    state.noteEntries = payload.notes || [];
+  } catch (error) {
+    state.noteEntries = [];
+  }
+  renderNoteDateList();
+}
+
+async function loadMarketNote() {
+  if (!els.marketNote) return;
+  const key = noteKey();
+  state.noteLastKey = key;
+  renderNoteScope();
+  renderNoteDateList();
+  setNoteStatus("\u8bfb\u53d6\u4e2d...");
+  try {
+    const response = await fetch(`/api/notes?note_date=${encodeURIComponent(noteDate())}`);
+    if (!response.ok) throw new Error(await response.text());
+    const payload = await response.json();
+    if (state.noteLastKey !== key) return;
+    els.marketNote.value = payload.content || "";
+    state.noteDirty = false;
+    setNoteStatus(payload.updated_at ? "\u5df2\u4fdd\u5b58" : "\u672a\u8bb0\u5f55", payload.updated_at ? "ok" : "");
+  } catch (error) {
+    setNoteStatus("\u8bfb\u53d6\u5931\u8d25", "error");
+  }
+}
+
+async function saveMarketNote() {
+  if (!els.marketNote || state.noteSaving || !state.noteDirty) return;
+  const targetDate = state.noteLastKey || noteKey();
+  state.noteSaving = true;
+  setNoteStatus("\u4fdd\u5b58\u4e2d...");
+  try {
+    const response = await fetch(`/api/notes?note_date=${encodeURIComponent(targetDate)}`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ content: els.marketNote.value }),
+    });
+    if (!response.ok) throw new Error(await response.text());
+    await response.json();
+    if (state.noteLastKey === targetDate) {
+      state.noteDirty = false;
+      setNoteStatus(els.marketNote.value.trim() ? "\u5df2\u4fdd\u5b58" : "\u672a\u8bb0\u5f55", els.marketNote.value.trim() ? "ok" : "");
+      await loadMarketNoteDates();
+    }
+  } catch (error) {
+    setNoteStatus("\u4fdd\u5b58\u5931\u8d25", "error");
+  } finally {
+    state.noteSaving = false;
+  }
 }
 
 function resetTimer() {
@@ -905,6 +1092,9 @@ async function showHistoricalRankings() {
   els.autoRefresh.checked = false;
   resetTimer();
   await loadRankings(false);
+  if (els.noteDate) els.noteDate.value = state.rankingDate;
+  await loadMarketNoteDates();
+  await loadMarketNote();
 }
 
 async function showRealtimeRankings() {
@@ -914,6 +1104,9 @@ async function showRealtimeRankings() {
   els.liveRankingBtn.disabled = true;
   resetTimer();
   await loadRankings(true);
+  if (els.noteDate) els.noteDate.value = todayText();
+  await loadMarketNoteDates();
+  await loadMarketNote();
 }
 
 function parseWanValue(raw) {
@@ -1095,7 +1288,7 @@ document.addEventListener("click", async (event) => {
   });
 });
 
-document.addEventListener("click", (event) => {
+document.addEventListener("click", async (event) => {
   const viewTab = event.target.closest("[data-view]");
   if (viewTab) {
     switchView(viewTab.dataset.view);
@@ -1103,6 +1296,7 @@ document.addEventListener("click", (event) => {
   }
   const tab = event.target.closest("[data-pool]");
   if (tab) {
+    await saveMarketNote();
     state.activePool = tab.dataset.pool;
     if (els.backtestPoolSelect.querySelector(`option[value="${state.activePool}"]`)) {
       els.backtestPoolSelect.value = state.activePool;
@@ -1159,18 +1353,63 @@ els.backtestFullscreenBtn.addEventListener("click", async () => {
 document.addEventListener("fullscreenchange", () => {
   window.setTimeout(() => window.Plotly?.Plots.resize(els.backtestChart), 120);
 });
+els.noteDate?.addEventListener("change", async () => {
+  await saveMarketNote();
+  await loadMarketNoteDates();
+  await loadMarketNote();
+});
+els.noteTodayBtn?.addEventListener("click", async () => {
+  await saveMarketNote();
+  if (els.noteDate) els.noteDate.value = todayText();
+  await loadMarketNoteDates();
+  await loadMarketNote();
+});
+els.noteSaveBtn?.addEventListener("click", async () => {
+  await saveMarketNote();
+});
+els.noteDateList?.addEventListener("click", async (event) => {
+  const button = event.target.closest("[data-note-date]");
+  if (!button) return;
+  await saveMarketNote();
+  if (els.noteDate) els.noteDate.value = button.dataset.noteDate;
+  await loadMarketNote();
+});
+els.marketNote?.addEventListener("input", () => {
+  state.noteDirty = true;
+  setNoteStatus("\u672a\u4fdd\u5b58", "warn");
+});
+els.marketNote?.addEventListener("blur", () => saveMarketNote());
+els.marketNote?.addEventListener("keydown", (event) => {
+  if ((event.ctrlKey || event.metaKey) && event.key === "Enter") {
+    event.preventDefault();
+    saveMarketNote();
+  }
+});
 els.intervalSelect.addEventListener("change", resetTimer);
 els.autoRefresh.addEventListener("change", resetTimer);
 [els.searchInput, els.ratingFilter, els.holdOnly, els.buyOnly].forEach((el) => {
   el.addEventListener("input", render);
   el.addEventListener("change", render);
 });
+els.columnOptions?.addEventListener("change", (event) => {
+  const input = event.target.closest('input[type="checkbox"]');
+  if (!input) return;
+  const checked = Array.from(els.columnOptions.querySelectorAll('input[type="checkbox"]:checked')).map((item) => item.value);
+  state.visibleColumns = checked.length ? checked : [...defaultVisibleColumnKeys];
+  saveVisibleColumns();
+  render();
+});
 
 (async function init() {
   try {
+    state.visibleColumns = loadVisibleColumns();
+    renderColumnEditor();
     await loadConfig();
     await loadHoldingsStatus();
+    if (els.noteDate) els.noteDate.value = todayText();
     await loadRankings(false);
+    await loadMarketNoteDates();
+    await loadMarketNote();
     await loadAccountTodayChange();
     resetTimer();
   } catch (error) {

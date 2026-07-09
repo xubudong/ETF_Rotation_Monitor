@@ -30,9 +30,9 @@ select {
 }
 
 .app-shell {
-  width: min(1560px, calc(100vw - 32px));
+  width: min(1760px, calc(100vw - 48px));
   margin: 0 auto;
-  padding: 20px 0 32px;
+  padding: 14px 0 24px;
 }
 
 .topbar,
@@ -49,7 +49,7 @@ select {
   align-items: center;
   justify-content: space-between;
   gap: 20px;
-  padding: 16px 18px;
+  padding: 12px 14px;
 }
 
 h1,
@@ -59,17 +59,17 @@ h2 {
 }
 
 h1 {
-  font-size: 24px;
+  font-size: 22px;
 }
 
 h2 {
-  font-size: 18px;
+  font-size: 16px;
 }
 
 .status-line {
-  margin-top: 6px;
+  margin-top: 5px;
   color: var(--muted);
-  font-size: 13px;
+  font-size: 12px;
 }
 
 .status-line.ok {
@@ -102,13 +102,20 @@ h2 {
 
 select,
 input[type="search"],
-input[type="date"] {
-  min-height: 36px;
+input[type="date"],
+textarea {
+  min-height: 32px;
   border: 1px solid var(--line);
   border-radius: 6px;
   background: #fff;
   color: var(--ink);
   padding: 0 10px;
+}
+
+textarea {
+  padding-top: 8px;
+  padding-bottom: 8px;
+  resize: vertical;
 }
 
 .search input {
@@ -119,13 +126,13 @@ input[type="date"] {
   display: inline-flex;
   align-items: center;
   gap: 6px;
-  min-height: 36px;
+  min-height: 32px;
   color: var(--ink);
-  font-size: 13px;
+  font-size: 12px;
 }
 
 button {
-  min-height: 36px;
+  min-height: 32px;
   border: 1px solid var(--line);
   border-radius: 6px;
   background: #fff;
@@ -137,7 +144,7 @@ button.primary {
   border-color: var(--blue);
   background: var(--blue);
   color: #fff;
-  padding: 0 16px;
+  padding: 0 14px;
 }
 
 #cacheBtn {
@@ -158,22 +165,22 @@ button:disabled {
 }
 
 .filters {
-  margin-top: 14px;
-  padding: 12px;
+  margin-top: 12px;
+  padding: 10px;
 }
 
 .cache-status-panel {
   display: flex;
   align-items: center;
   gap: 8px;
-  min-height: 38px;
-  margin-bottom: 12px;
-  padding: 8px 10px;
+  min-height: 32px;
+  margin-bottom: 10px;
+  padding: 6px 9px;
   border: 1px solid var(--line);
   border-radius: 6px;
   background: #fff;
   color: var(--muted);
-  font-size: 13px;
+  font-size: 12px;
 }
 
 .cache-status-panel strong {
@@ -221,8 +228,8 @@ button:disabled {
   grid-template-columns: minmax(0, 1fr) auto;
   gap: 3px 12px;
   align-items: baseline;
-  min-height: 58px;
-  padding: 10px;
+  min-height: 50px;
+  padding: 8px;
   border: 1px solid var(--line);
   border-radius: 6px;
   background: #f8fafc;
@@ -240,7 +247,7 @@ button:disabled {
 }
 
 .account-change-card strong {
-  font-size: 22px;
+  font-size: 20px;
   font-variant-numeric: tabular-nums;
 }
 
@@ -296,8 +303,8 @@ button:disabled {
 .summary-card {
   display: grid;
   gap: 4px;
-  min-height: 106px;
-  padding: 12px;
+  min-height: 88px;
+  padding: 10px;
   text-align: left;
   background: var(--panel);
 }
@@ -311,7 +318,7 @@ button:disabled {
 }
 
 .summary-card strong {
-  font-size: 26px;
+  font-size: 22px;
 }
 
 .summary-card small,
@@ -323,7 +330,7 @@ button:disabled {
 
 .backtest-panel {
   margin-top: 14px;
-  padding: 12px 14px;
+  padding: 10px 12px;
 }
 
 .backtest-header {
@@ -381,8 +388,8 @@ button:disabled {
 .backtest-metric {
   display: grid;
   gap: 3px;
-  min-height: 66px;
-  padding: 10px;
+  min-height: 56px;
+  padding: 8px;
   border: 1px solid var(--line);
   border-radius: 6px;
   background: #f8fafc;
@@ -397,14 +404,14 @@ button:disabled {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-  font-size: 18px;
+  font-size: 16px;
   font-variant-numeric: tabular-nums;
 }
 
 .backtest-content {
   display: grid;
   grid-template-columns: minmax(360px, 1fr) minmax(340px, 0.8fr);
-  gap: 14px;
+  gap: 12px;
 }
 
 .backtest-chart {
@@ -480,8 +487,8 @@ button:disabled {
 }
 
 .table-wrap {
-  overflow: auto;
-  max-height: calc(100vh - 310px);
+  overflow-x: auto;
+  overflow-y: visible;
 }
 
 table {
@@ -539,6 +546,206 @@ td.numeric {
 
 .holding-edit-status.error {
   color: var(--red);
+}
+
+.column-editor {
+  position: relative;
+  align-self: end;
+  min-height: 32px;
+}
+
+.column-editor summary {
+  display: inline-flex;
+  align-items: center;
+  min-height: 32px;
+  padding: 0 12px;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  background: #fff;
+  cursor: pointer;
+  user-select: none;
+}
+
+.column-options {
+  position: absolute;
+  right: 0;
+  z-index: 5;
+  display: grid;
+  grid-template-columns: repeat(2, minmax(96px, 1fr));
+  gap: 6px 10px;
+  width: min(420px, calc(100vw - 48px));
+  max-height: 320px;
+  margin-top: 6px;
+  padding: 10px;
+  overflow: auto;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  background: #fff;
+  box-shadow: 0 14px 32px rgba(15, 23, 42, 0.12);
+}
+
+.column-option {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 26px;
+  color: var(--ink);
+  font-size: 12px;
+  white-space: nowrap;
+}
+
+.note-strip {
+  display: grid;
+  grid-template-columns: minmax(260px, 1fr) minmax(0, 3fr);
+  gap: 12px;
+  margin: 10px 0;
+  padding: 10px;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  background: #f8fafc;
+}
+
+.note-editor {
+  display: grid;
+  gap: 8px;
+  min-width: 0;
+}
+
+.note-meta {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 8px;
+  min-height: 24px;
+  color: var(--muted);
+  font-size: 12px;
+  white-space: nowrap;
+}
+
+.note-meta strong {
+  color: var(--ink);
+  font-size: 13px;
+}
+
+#marketNote {
+  width: 100%;
+  height: 72px;
+  min-height: 72px;
+  line-height: 20px;
+  overflow: hidden;
+}
+
+#marketNote:focus {
+  height: 96px;
+  outline: 2px solid rgba(29, 95, 209, 0.14);
+  overflow: auto;
+}
+
+.note-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.note-actions button {
+  padding: 0 12px;
+  white-space: nowrap;
+}
+
+.note-actions .note-status {
+  flex: 1 1 auto;
+}
+
+.note-status {
+  min-height: 30px;
+  padding-top: 7px;
+  white-space: nowrap;
+}
+
+.note-status.ok {
+  color: var(--green);
+}
+
+.note-status.warn {
+  color: var(--amber);
+}
+
+.note-status.error {
+  color: var(--red);
+}
+
+.note-timeline {
+  min-width: 0;
+  overflow: hidden;
+}
+
+.note-date-list {
+  display: flex;
+  gap: 10px;
+  min-height: 132px;
+  overflow-x: auto;
+  padding: 2px 2px 8px;
+}
+
+.note-card {
+  display: grid;
+  grid-template-rows: auto auto 1fr;
+  align-content: start;
+  flex: 0 0 220px;
+  min-height: 120px;
+  padding: 8px;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  background: #fff;
+  color: var(--ink);
+  text-align: left;
+  white-space: normal;
+}
+
+.note-card.active {
+  border-color: var(--blue);
+  background: #eef5ff;
+}
+
+.note-card.today .note-card-date::after {
+  content: "今天";
+  margin-left: 6px;
+  color: var(--green);
+  font-size: 12px;
+  font-weight: 400;
+}
+
+.note-card-date {
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.note-card-time {
+  margin-top: 4px;
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.note-card-body {
+  margin-top: 6px;
+  color: #123a64;
+  font-size: 12px;
+  line-height: 1.55;
+  overflow: hidden;
+  display: -webkit-box;
+  -webkit-line-clamp: 4;
+  -webkit-box-orient: vertical;
+}
+
+.note-empty {
+  display: grid;
+  place-items: center;
+  flex: 1 0 220px;
+  min-height: 120px;
+  border: 1px dashed var(--line);
+  border-radius: 6px;
+  color: var(--muted);
+  font-size: 13px;
 }
 
 .holding-toggle-btn {
@@ -723,7 +930,7 @@ td.numeric {
 
 @media (max-width: 900px) {
   .app-shell {
-    width: min(100vw - 20px, 1560px);
+    width: calc(100vw - 20px);
     padding-top: 10px;
   }
 
@@ -753,6 +960,25 @@ td.numeric {
     grid-template-columns: 1fr;
   }
 
+  .note-strip {
+    grid-template-columns: 1fr;
+  }
+
+  .note-actions {
+    flex-wrap: wrap;
+  }
+
+  .column-options {
+    left: 0;
+    right: auto;
+    grid-template-columns: 1fr;
+  }
+
+  .note-status {
+    padding-top: 0;
+    text-align: left;
+  }
+
   .backtest-header,
   .backtest-actions,
   .custom-range {
@@ -765,7 +991,4 @@ td.numeric {
     grid-template-columns: 1fr;
   }
 
-  .table-wrap {
-    max-height: calc(100vh - 420px);
-  }
 }

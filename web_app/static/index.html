@@ -69,6 +69,24 @@
             <small id="globalTodayPnl">等待持仓数据</small>
           </div>
         </div>
+        <div class="note-strip" aria-label="研究日志">
+          <div class="note-editor">
+            <div class="note-meta">
+              <strong>研究日志</strong>
+              <span id="noteScope">全局</span>
+            </div>
+            <input id="noteDate" type="date" />
+            <textarea id="marketNote" rows="3" maxlength="2000" placeholder="记录板块强弱、驱动因素、预期差..."></textarea>
+            <div class="note-actions">
+              <span id="noteStatus" class="muted note-status"></span>
+              <button id="noteTodayBtn" type="button">今天</button>
+              <button id="noteSaveBtn" class="primary" type="button">保存笔记</button>
+            </div>
+          </div>
+          <div class="note-timeline" aria-label="历史笔记时间线">
+            <div id="noteDateList" class="note-date-list"></div>
+          </div>
+        </div>
         <div class="tabs" id="tabs"></div>
         <div class="filter-row">
           <label class="search">
@@ -92,6 +110,10 @@
             <input id="buyOnly" type="checkbox" />
             <span>仅买入</span>
           </label>
+          <details class="column-editor" id="columnEditor">
+            <summary>列</summary>
+            <div id="columnOptions" class="column-options"></div>
+          </details>
           <div id="holdingEditStatus" class="muted holding-edit-status"></div>
         </div>
       </section>
