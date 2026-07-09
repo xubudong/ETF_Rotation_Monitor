@@ -104,12 +104,12 @@ select,
 input[type="search"],
 input[type="date"],
 textarea {
-  min-height: 32px;
+  min-height: 36px;
   border: 1px solid var(--line);
   border-radius: 6px;
   background: #fff;
   color: var(--ink);
-  padding: 0 10px;
+  padding: 0 12px;
 }
 
 textarea {
@@ -119,7 +119,7 @@ textarea {
 }
 
 .search input {
-  width: 240px;
+  width: 264px;
 }
 
 .toggle {
@@ -173,9 +173,9 @@ button:disabled {
   display: flex;
   align-items: center;
   gap: 8px;
-  min-height: 32px;
+  min-height: 36px;
   margin-bottom: 10px;
-  padding: 6px 9px;
+  padding: 8px 11px;
   border: 1px solid var(--line);
   border-radius: 6px;
   background: #fff;
@@ -228,8 +228,8 @@ button:disabled {
   grid-template-columns: minmax(0, 1fr) auto;
   gap: 3px 12px;
   align-items: baseline;
-  min-height: 50px;
-  padding: 8px;
+  min-height: 64px;
+  padding: 10px 12px;
   border: 1px solid var(--line);
   border-radius: 6px;
   background: #f8fafc;
@@ -303,8 +303,8 @@ button:disabled {
 .summary-card {
   display: grid;
   gap: 4px;
-  min-height: 88px;
-  padding: 10px;
+  min-height: 96px;
+  padding: 12px;
   text-align: left;
   background: var(--panel);
 }
@@ -495,7 +495,7 @@ table {
   width: 100%;
   min-width: 1260px;
   border-collapse: collapse;
-  font-size: 13px;
+  font-size: 15px;
 }
 
 th,
@@ -631,7 +631,8 @@ td.numeric {
   width: 100%;
   height: 72px;
   min-height: 72px;
-  line-height: 20px;
+  font-size: 16px;
+  line-height: 22px;
   overflow: hidden;
 }
 
@@ -729,7 +730,7 @@ td.numeric {
 .note-card-body {
   margin-top: 6px;
   color: #123a64;
-  font-size: 12px;
+  font-size: 14px;
   line-height: 1.55;
   overflow: hidden;
   display: -webkit-box;
