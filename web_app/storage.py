@@ -10,6 +10,9 @@ from .pools import all_unique_etfs
 from .utils import now_iso
 
 
+GLOBAL_NOTE_KEY = "global_note"
+
+
 def init_cache_db() -> None:
     DATA_DIR.mkdir(exist_ok=True)
     with sqlite3.connect(CACHE_DB) as conn:
@@ -54,6 +57,17 @@ def init_cache_db() -> None:
                 source_file TEXT,
                 updated_at TEXT NOT NULL,
                 PRIMARY KEY (pool_key, code)
+            )
+            """
+        )
+        conn.execute(
+            """
+            CREATE TABLE IF NOT EXISTS market_notes (
+                note_date TEXT NOT NULL,
+                pool_key TEXT NOT NULL,
+                content TEXT NOT NULL DEFAULT '',
+                updated_at TEXT NOT NULL,
+                PRIMARY KEY (note_date, pool_key)
             )
             """
         )
@@ -323,6 +337,70 @@ def holdings_status() -> dict[str, Any]:
                 "source_file": source["value"] if source else None,
             }
     return status
+
+
+
+def _validate_note_key(pool_key: str) -> None:
+    if pool_key != GLOBAL_NOTE_KEY and pool_key not in POOL_SPECS:
+        raise ValueError("未知标的池")
+
+
+def load_market_note(note_date: str, pool_key: str = GLOBAL_NOTE_KEY) -> dict[str, Any]:
+    _validate_note_key(pool_key)
+    init_cache_db()
+    with sqlite3.connect(CACHE_DB) as conn:
+        conn.row_factory = sqlite3.Row
+        row = conn.execute(
+            "SELECT note_date, pool_key, content, updated_at FROM market_notes WHERE note_date = ? AND pool_key = ?",
+            (note_date, pool_key),
+        ).fetchone()
+    if row is None:
+        return {"note_date": note_date, "pool_key": pool_key, "content": "", "updated_at": None}
+    return dict(row)
+
+
+def list_market_notes(pool_key: str = GLOBAL_NOTE_KEY, limit: int = 20) -> list[dict[str, Any]]:
+    _validate_note_key(pool_key)
+    init_cache_db()
+    bounded_limit = max(1, min(int(limit or 20), 60))
+    with sqlite3.connect(CACHE_DB) as conn:
+        conn.row_factory = sqlite3.Row
+        rows = conn.execute(
+            """
+            SELECT note_date, pool_key, content, updated_at
+            FROM market_notes
+            WHERE pool_key = ? AND TRIM(content) != ''
+            ORDER BY note_date DESC
+            LIMIT ?
+            """,
+            (pool_key, bounded_limit),
+        ).fetchall()
+    return [dict(row) for row in rows]
+
+
+def save_market_note(note_date: str, pool_key: str = GLOBAL_NOTE_KEY, content: str = "") -> dict[str, Any]:
+    _validate_note_key(pool_key)
+    normalized = str(content or "").strip()
+    if len(normalized) > 2000:
+        raise ValueError("笔记最多 2000 个字符")
+    init_cache_db()
+    updated_at = now_iso()
+    with sqlite3.connect(CACHE_DB) as conn:
+        if normalized:
+            conn.execute(
+                """
+                INSERT INTO market_notes (note_date, pool_key, content, updated_at)
+                VALUES (?, ?, ?, ?)
+                ON CONFLICT(note_date, pool_key) DO UPDATE SET
+                    content = excluded.content,
+                    updated_at = excluded.updated_at
+                """,
+                (note_date, pool_key, normalized, updated_at),
+            )
+        else:
+            conn.execute("DELETE FROM market_notes WHERE note_date = ? AND pool_key = ?", (note_date, pool_key))
+            updated_at = None
+    return {"note_date": note_date, "pool_key": pool_key, "content": normalized, "updated_at": updated_at}
 
 
 def read_sqlite_history(code: str, days: int = 100) -> pd.DataFrame | None:

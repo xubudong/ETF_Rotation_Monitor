@@ -28,7 +28,7 @@ from .config import (
 )
 from .ranking import build_rankings
 from .scoring import list_scoring_strategies
-from .storage import cache_stats, holdings_status, save_manual_holding
+from .storage import GLOBAL_NOTE_KEY, cache_stats, holdings_status, list_market_notes, load_market_note, save_manual_holding, save_market_note
 from .tech_discovery import tech_pool_status, update_tech_pool_state
 from .utils import module_available, now_iso
 
@@ -52,6 +52,10 @@ class ManualHoldingRequest(BaseModel):
     name: str | None = None
     held: bool = True
     market_value_wan: float | None = Field(default=None, ge=0)
+
+
+class NoteRequest(BaseModel):
+    content: str = Field(default="", max_length=2000)
 
 
 def _state_error(payload: dict) -> str | None:
@@ -270,6 +274,58 @@ def manual_holding_api(pool_key: str, payload: ManualHoldingRequest):
         raise HTTPException(status_code=400, detail=str(exc)) from exc
     clear_payload()
     return {**result, "status": holdings_status()}
+
+
+@app.get("/api/notes/recent")
+def recent_global_notes_api(limit: int = 20):
+    try:
+        return {"pool_key": GLOBAL_NOTE_KEY, "notes": list_market_notes(GLOBAL_NOTE_KEY, limit=limit)}
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+
+@app.get("/api/notes")
+def global_note_api(note_date: date | None = None):
+    target_date = (note_date or date.today()).isoformat()
+    try:
+        return load_market_note(target_date, GLOBAL_NOTE_KEY)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+
+@app.post("/api/notes")
+def save_global_note_api(payload: NoteRequest, note_date: date | None = None):
+    target_date = (note_date or date.today()).isoformat()
+    try:
+        return save_market_note(target_date, GLOBAL_NOTE_KEY, payload.content)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+
+@app.get("/api/notes/{pool_key}/recent")
+def recent_notes_api(pool_key: str, limit: int = 20):
+    try:
+        return {"pool_key": pool_key, "notes": list_market_notes(pool_key, limit=limit)}
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+
+@app.get("/api/notes/{pool_key}")
+def note_api(pool_key: str, note_date: date | None = None):
+    target_date = (note_date or date.today()).isoformat()
+    try:
+        return load_market_note(target_date, pool_key)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+
+@app.post("/api/notes/{pool_key}")
+def save_note_api(pool_key: str, payload: NoteRequest, note_date: date | None = None):
+    target_date = (note_date or date.today()).isoformat()
+    try:
+        return save_market_note(target_date, pool_key, payload.content)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
 
 
 @app.get("/api/tech-pool/status")
