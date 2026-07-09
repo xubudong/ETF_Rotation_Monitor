@@ -23,7 +23,7 @@ function Import-DotEnv {
 Import-DotEnv -Path (Join-Path $Root ".env")
 
 $HostAddress = if ($env:WEB_HOST) { $env:WEB_HOST } else { "127.0.0.1" }
-$StartPort = if ($env:WEB_PORT) { [int]$env:WEB_PORT } else { 8000 }
+$StartPort = if ($env:WEB_PORT) { [int]$env:WEB_PORT } else { 8020 }
 $PortScanLimit = if ($env:WEB_PORT_SCAN_LIMIT) { [int]$env:WEB_PORT_SCAN_LIMIT } else { 30 }
 $RuntimeDir = Join-Path $Root "runtime"
 $LogDir = Join-Path $RuntimeDir "logs"

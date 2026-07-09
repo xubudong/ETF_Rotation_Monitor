@@ -33,7 +33,7 @@ if [[ "${1-}" == "--foreground" ]]; then
 fi
 
 HOST_ADDRESS="${WEB_HOST:-127.0.0.1}"
-START_PORT="${WEB_PORT:-8000}"
+START_PORT=${WEB_PORT:-8020}
 PORT_SCAN_LIMIT="${WEB_PORT_SCAN_LIMIT:-30}"
 RUNTIME_DIR="$ROOT_DIR/runtime"
 LOG_DIR="$RUNTIME_DIR/logs"

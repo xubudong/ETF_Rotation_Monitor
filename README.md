@@ -43,7 +43,7 @@ chmod +x run_web.sh
 ./run_web.sh
 ```
 
-默认访问 `http://127.0.0.1:8000`。
+默认访问 `http://127.0.0.1:8020`。
 
 如需内网访问：
 
@@ -104,7 +104,7 @@ Create `.env` from `.env.example` when local secrets or runtime defaults are nee
 ```text
 AKSHARE_PROXY_TOKEN=your-token
 WEB_HOST=127.0.0.1
-WEB_PORT=8000
+WEB_PORT=8020
 WEB_PORT_SCAN_LIMIT=30
 ```
 
