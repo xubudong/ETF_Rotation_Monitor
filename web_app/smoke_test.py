@@ -8,6 +8,8 @@ from web_app.ranking import build_rankings
 REQUIRED_ROW_KEYS = {
     "代码",
     "名称",
+    "日内走势",
+    "日线走势",
     "持仓",
     "持仓市值",
     "板块",

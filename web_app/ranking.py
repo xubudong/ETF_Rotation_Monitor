@@ -8,7 +8,7 @@ import pandas as pd
 
 from .config import DATA_SOURCES, POOL_SPECS, ROOT
 from .market_regime import runtime_overrides_for_market_filter
-from .market_data import fetch_spot, get_history, merge_spot_row
+from .market_data import fetch_intraday_trends, fetch_spot, get_history, merge_spot_row
 from .pools import load_pool_definitions
 from .scoring import calculate_indicators, cross_sectional_score_and_rate, get_category, get_strategy_config
 from .storage import load_account_holdings, read_cached_history
@@ -16,6 +16,7 @@ from .utils import normalize_records, now_iso
 
 HISTORY_LOOKBACK_DAYS = 3000
 HISTORY_CALENDAR_PRIORITY = ["510300", "563360", "510500", "510050", "588000", "159915"]
+TREND_POINT_DAYS = 30
 
 
 def _rank_change_text(previous_rank: Any, current_rank: int) -> str:
@@ -28,6 +29,18 @@ def _rank_change_text(previous_rank: Any, current_rank: int) -> str:
     if diff < 0:
         return f"↓{abs(diff)}"
     return "-"
+
+
+def _close_trend_points(df: pd.DataFrame, end_date: pd.Timestamp | None = None) -> list[float]:
+    if df is None or df.empty or "close" not in df.columns:
+        return []
+    closes = pd.to_numeric(df["close"], errors="coerce").dropna()
+    if end_date is not None:
+        closes = closes[closes.index <= end_date]
+    values = closes.tail(TREND_POINT_DAYS)
+    if len(values) < 2:
+        return []
+    return [round(float(value), 4) for value in values]
 
 
 def _historical_date_index(code: str, before_or_on: pd.Timestamp) -> pd.Timestamp | None:
@@ -115,10 +128,13 @@ def historical_score_pool(
             if scoring_date not in df.index:
                 continue
             latest = df.loc[scoring_date]
+            trend = _close_trend_points(df, scoring_date)
             rows.append(
                 {
                     "代码": code,
                     "名称": name,
+                    "日内走势": [],
+                    "日线走势": trend,
                     "持仓": holding.get("持仓", ""),
                     "账户": holding.get("账户", ""),
                     "仓位占比": holding.get("仓位占比"),
@@ -168,7 +184,7 @@ def historical_score_pool(
 
 def _select_score_columns(scored: pd.DataFrame) -> list[dict[str, Any]]:
     columns = [
-        "代码", "名称", "持仓", "账户", "仓位占比", "持仓市值", "板块", "昨日排名", "排名变化",
+        "代码", "名称", "日内走势", "日线走势", "持仓", "账户", "仓位占比", "持仓市值", "板块", "昨日排名", "排名变化",
         "动态预警", "评级", "最新收盘价", "当日涨跌幅", "MA5", "价格>MA5", "MA15", "价格>MA15", "MA20", "价格>MA20",
         "20日涨幅", "量比", "动量得分", "量能得分", "趋势得分", "综合总分",
     ]
@@ -187,6 +203,7 @@ def score_pool(
     runtime_overrides: dict[str, Any] | None = None,
 ) -> list[dict[str, Any]]:
     spot = fetch_spot(pool, source, errors)
+    intraday_trends = fetch_intraday_trends(pool, source, errors)
     rows: list[dict[str, Any]] = []
 
     for code, name in pool.items():
@@ -200,6 +217,7 @@ def score_pool(
         try:
             df = calculate_indicators(df.copy())
             latest = df.iloc[-1]
+            trend = _close_trend_points(df)
             spot_return = spot.get(code, {}).get("涨跌幅")
             if spot_return is not None and not pd.isna(spot_return):
                 latest_return_1d = float(spot_return)
@@ -209,6 +227,8 @@ def score_pool(
                 {
                     "代码": code,
                     "名称": name,
+                    "日内走势": intraday_trends.get(code, []),
+                    "日线走势": trend,
                     "持仓": holding.get("持仓", ""),
                     "账户": holding.get("账户", ""),
                     "仓位占比": holding.get("仓位占比"),

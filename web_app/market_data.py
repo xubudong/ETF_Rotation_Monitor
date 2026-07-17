@@ -1,7 +1,9 @@
 from __future__ import annotations
 
 import importlib
+import json
 import urllib.request
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from datetime import datetime
 from typing import Any
 
@@ -229,6 +231,115 @@ def fetch_spot(pool: dict[str, str], source: str, errors: list[str]) -> dict[str
     except Exception as exc:
         errors.append(f"{source} 实时行情不可用: {exc}")
         return {}
+
+
+def _tencent_minute_code(code: str) -> str:
+    return f"{market_prefix(code)}{code}"
+
+
+def _extract_tencent_minute_prices(item: Any) -> list[float]:
+    if not isinstance(item, dict):
+        return []
+    payload = item.get("data") if isinstance(item.get("data"), dict) else item
+    raw_points = payload.get("data") if isinstance(payload, dict) else None
+    if not isinstance(raw_points, list):
+        return []
+
+    prices: list[float] = []
+    for point in raw_points:
+        if isinstance(point, str):
+            parts = point.replace(",", " ").split()
+            if len(parts) >= 2:
+                try:
+                    price = float(parts[1])
+                except ValueError:
+                    continue
+                if price > 0:
+                    prices.append(price)
+        elif isinstance(point, (list, tuple)) and len(point) >= 2:
+            try:
+                price = float(point[1])
+            except (TypeError, ValueError):
+                continue
+            if price > 0:
+                prices.append(price)
+    return prices
+
+
+def fetch_intraday_trends_tencent(pool: dict[str, str]) -> dict[str, list[float]]:
+    trends: dict[str, list[float]] = {}
+    with ThreadPoolExecutor(max_workers=12) as executor:
+        futures = {executor.submit(fetch_intraday_trend_tencent, code): code for code in pool}
+        for future in as_completed(futures):
+            code = futures[future]
+            try:
+                prices = future.result()
+            except Exception:
+                continue
+            if prices:
+                trends[code] = prices
+    return trends
+
+
+def fetch_intraday_trend_tencent(code: str) -> list[float]:
+    query_code = _tencent_minute_code(code)
+    url = f"https://ifzq.gtimg.cn/appstock/app/minute/query?code={query_code}"
+    req = urllib.request.Request(url, headers={"User-Agent": "Mozilla/5.0", "Referer": "https://gu.qq.com/"})
+    with urllib.request.urlopen(req, timeout=8) as response:
+        text = response.read().decode("utf-8", errors="ignore")
+    payload = json.loads(text)
+    data = payload.get("data") if isinstance(payload, dict) else {}
+    item = data.get(query_code) if isinstance(data, dict) else None
+    prices = _extract_tencent_minute_prices(item)
+    return [round(float(value), 4) for value in prices]
+
+
+def _eastmoney_secid(code: str) -> str:
+    market = "1" if str(code).startswith(("5", "6")) else "0"
+    return f"{market}.{code}"
+
+
+def fetch_intraday_trends_em(pool: dict[str, str]) -> dict[str, list[float]]:
+    trends: dict[str, list[float]] = {}
+    for code in pool:
+        url = (
+            "https://push2his.eastmoney.com/api/qt/stock/trends2/get"
+            f"?secid={_eastmoney_secid(code)}&fields1=f1,f2,f3,f4,f5,f6,f7,f8,f9,f10,f11"
+            "&fields2=f51,f53&ndays=1&iscr=0&iscca=0&ut=fa5fd1943c7b386f172d6893dbfba10b"
+        )
+        req = urllib.request.Request(url, headers={"User-Agent": "Mozilla/5.0", "Referer": "https://quote.eastmoney.com/"})
+        with urllib.request.urlopen(req, timeout=8) as response:
+            payload = json.loads(response.read().decode("utf-8", errors="ignore"))
+        rows = ((payload.get("data") or {}).get("trends") or []) if isinstance(payload, dict) else []
+        prices: list[float] = []
+        for row in rows:
+            parts = str(row).split(",")
+            if len(parts) < 2:
+                continue
+            try:
+                price = float(parts[1])
+            except ValueError:
+                continue
+            if price > 0:
+                prices.append(price)
+        if prices:
+            trends[code] = [round(float(value), 4) for value in prices]
+    return trends
+
+
+def fetch_intraday_trends(pool: dict[str, str], source: str, errors: list[str]) -> dict[str, list[float]]:
+    providers = ["tencent", "em"] if source != "em" else ["em", "tencent"]
+    for provider in providers:
+        try:
+            if provider == "tencent":
+                trends = fetch_intraday_trends_tencent(pool)
+            else:
+                trends = fetch_intraday_trends_em(pool)
+            if trends:
+                return trends
+        except Exception:
+            continue
+    return {}
 
 
 def get_history(code: str, name: str, source: str, refresh: bool, errors: list[str]) -> pd.DataFrame | None:

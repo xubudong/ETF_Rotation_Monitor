@@ -97,7 +97,7 @@ h2 {
   display: grid;
   gap: 5px;
   color: var(--muted);
-  font-size: 12px;
+  font-size: 15px;
 }
 
 select,
@@ -128,7 +128,12 @@ textarea {
   gap: 6px;
   min-height: 32px;
   color: var(--ink);
-  font-size: 12px;
+  font-weight: 700;
+}
+
+.toggle input[type="checkbox"] {
+  width: 16px;
+  height: 16px;
 }
 
 button {
@@ -302,6 +307,7 @@ button:disabled {
 
 .summary-card {
   display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
   gap: 4px;
   min-height: 96px;
   padding: 12px;
@@ -321,8 +327,25 @@ button:disabled {
   font-size: 22px;
 }
 
+.summary-stats {
+  display: grid;
+  grid-row: 1 / span 3;
+  grid-column: 2;
+  gap: 3px;
+  align-self: center;
+  justify-items: end;
+  color: var(--muted);
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+}
+
+.summary-stats b {
+  font-weight: 700;
+}
+
 .summary-card small,
 .summary-card em {
+  grid-column: 1;
   color: var(--muted);
   font-size: 12px;
   font-style: normal;
@@ -493,7 +516,7 @@ button:disabled {
 
 table {
   width: 100%;
-  min-width: 1260px;
+  min-width: 1360px;
   border-collapse: collapse;
   font-size: 15px;
 }
@@ -528,6 +551,57 @@ th.sorted.asc::after {
 td.numeric {
   text-align: right;
   font-variant-numeric: tabular-nums;
+}
+
+.trend-cell {
+  width: 112px;
+  min-width: 112px;
+  padding-top: 6px;
+  padding-bottom: 6px;
+}
+
+.sparkline {
+  display: inline-flex;
+  width: 92px;
+  height: 40px;
+  vertical-align: middle;
+}
+
+.sparkline svg {
+  width: 100%;
+  height: 100%;
+  overflow: visible;
+}
+
+.sparkline-area {
+  stroke: none;
+}
+
+.sparkline-line {
+  fill: none;
+  stroke-width: 1.8;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.sparkline-up .sparkline-area {
+  fill: rgba(191, 47, 47, 0.08);
+}
+
+.sparkline-up .sparkline-line {
+  stroke: var(--red);
+}
+
+.sparkline-down .sparkline-area {
+  fill: rgba(20, 125, 70, 0.08);
+}
+
+.sparkline-down .sparkline-line {
+  stroke: var(--green);
+}
+
+.sparkline-empty {
+  color: var(--muted);
 }
 
 .holding-edit-status {
@@ -817,11 +891,11 @@ td.numeric {
 }
 
 .positive {
-  color: var(--green);
+  color: var(--red);
 }
 
 .negative {
-  color: var(--red);
+  color: var(--green);
 }
 
 .holding-row {
@@ -881,15 +955,15 @@ td.numeric {
 }
 
 .ma-yes {
-  border-color: #8fd7ad;
-  background: #daf6e6;
-  color: var(--green);
-}
-
-.ma-no {
   border-color: #f0aaa3;
   background: #ffe1df;
   color: var(--red);
+}
+
+.ma-no {
+  border-color: #8fd7ad;
+  background: #daf6e6;
+  color: var(--green);
 }
 
 .ma-neutral {

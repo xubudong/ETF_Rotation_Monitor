@@ -2,6 +2,8 @@ const columns = [
   { key: "排名", label: "#", type: "number" },
   { key: "代码", label: "代码", type: "text" },
   { key: "名称", label: "名称", type: "text" },
+  { key: "日内走势", label: "日内", type: "trend", sortable: false },
+  { key: "日线走势", label: "日线", type: "trend", sortable: false, optional: true },
   { key: "持仓操作", label: "持有", type: "holdingControl" },
   { key: "持仓市值", label: "市值(万)", type: "holdingValue" },
   { key: "仓位占比", label: "仓位", type: "holdPercent" },
@@ -112,8 +114,10 @@ function loadVisibleColumns() {
     const saved = JSON.parse(localStorage.getItem(COLUMN_STORAGE_KEY) || "null");
     if (Array.isArray(saved) && saved.length) {
       const known = new Set(columns.map((col) => col.key));
-      const filtered = saved.filter((key) => known.has(key));
-      if (filtered.length) return filtered;
+      const migrated = saved.map((key) => (key === "走势" ? "日内走势" : key));
+      const filtered = migrated.filter((key) => known.has(key));
+      const merged = filtered.includes("日内走势") ? [...filtered] : [...filtered.slice(0, 3), "日内走势", ...filtered.slice(3)];
+      if (merged.length) return merged;
     }
   } catch {}
   return [...defaultVisibleColumnKeys];
@@ -181,6 +185,40 @@ function ratingClass(rating) {
   if (rating === "持有观察") return "rating-hold";
   if (rating === "空仓回避") return "rating-avoid";
   return "rating-neutral";
+}
+
+function renderTrendSparkline(values) {
+  const points = Array.isArray(values) ? values.map(Number).filter(Number.isFinite) : [];
+  if (points.length < 2) return `<span class="sparkline-empty">-</span>`;
+  const width = 92;
+  const height = 40;
+  const padX = 3;
+  const padY = 5;
+  const min = Math.min(...points);
+  const max = Math.max(...points);
+  const rawSpan = max - min;
+  const buffer = rawSpan > 0 ? rawSpan * 0.12 : Math.max(Math.abs(max) * 0.005, 0.01);
+  const chartMin = min - buffer;
+  const chartMax = max + buffer;
+  const span = chartMax - chartMin || 1;
+  const lastUp = points[points.length - 1] >= points[0];
+  const tone = lastUp ? "up" : "down";
+  const coords = points.map((value, index) => {
+    const x = padX + (index / (points.length - 1)) * (width - padX * 2);
+    const y = padY + ((chartMax - value) / span) * (height - padY * 2);
+    return [x, y];
+  });
+  const path = coords.map(([x, y], index) => `${index === 0 ? "M" : "L"}${x.toFixed(1)} ${y.toFixed(1)}`).join(" ");
+  const area = `${path} L${(width - padX).toFixed(1)} ${(height - padY).toFixed(1)} L${padX.toFixed(1)} ${(height - padY).toFixed(1)} Z`;
+  const title = `${fmt(points[0], "price")} -> ${fmt(points[points.length - 1], "price")}`;
+  return `
+    <span class="sparkline sparkline-${tone}" title="${title}">
+      <svg viewBox="0 0 ${width} ${height}" aria-label="走势">
+        <path class="sparkline-area" d="${area}"></path>
+        <path class="sparkline-line" d="${path}"></path>
+      </svg>
+    </span>
+  `;
 }
 
 function setStatus(text, tone = "") {
@@ -833,6 +871,10 @@ function renderSummary() {
       const rows = group.rows || [];
       const buys = rows.filter((row) => row["评级"] === "买入配仓").length;
       const holds = rows.filter((row) => row["持仓"]).length;
+      const upCount = rows.filter((row) => Number(row["当日涨跌幅"]) > 0).length;
+      const downCount = rows.filter((row) => Number(row["当日涨跌幅"]) < 0).length;
+      const aboveMa20Count = rows.filter((row) => row["价格>MA20"] === "是").length;
+      const belowMa20Count = rows.filter((row) => row["价格>MA20"] === "否").length;
       const holdStatus = state.config?.holdings?.[key];
       const top = rows[0];
       const holdText = holdStatus ? `账户 ${holdStatus.count} / ${holdStatus.updated_at || "未维护"}` : `持仓 ${holds}`;
@@ -840,6 +882,10 @@ function renderSummary() {
         <button class="summary-card ${key === state.activePool ? "active" : ""}" type="button" data-pool="${key}">
           <span>${group.title}</span>
           <strong>${rows.length}</strong>
+          <span class="summary-stats">
+            <span>今日 <b class="positive">${upCount}</b>/<b class="negative">${downCount}</b></span>
+            <span>&gt;MA20 <b class="positive">${aboveMa20Count}</b>/<b class="negative">${belowMa20Count}</b></span>
+          </span>
           <small>买入 ${buys} / ${holdText}</small>
           <em>${top ? `${top["代码"]} ${top["名称"]}` : "暂无数据"}</em>
         </button>
@@ -852,7 +898,8 @@ function renderTableHead() {
   els.tableHead.innerHTML = visibleColumns()
     .map((col) => {
       const active = col.key === state.sortKey ? `sorted ${state.sortDir}` : "";
-      return `<th class="${active}" data-sort="${col.key}">${col.label}</th>`;
+      const sortAttr = col.sortable === false ? "" : ` data-sort="${col.key}"`;
+      return `<th class="${active}"${sortAttr}>${col.label}</th>`;
     })
     .join("");
 }
@@ -906,6 +953,9 @@ function renderTableBody(rows) {
           }
           if (col.key === "动态预警" && value) {
             return `<td><span class="alert-chip">${fmt(value, col.type)}</span></td>`;
+          }
+          if (col.type === "trend") {
+            return `<td class="trend-cell">${renderTrendSparkline(value)}</td>`;
           }
           if (col.key === "价格>MA5" || col.key === "价格>MA15" || col.key === "价格>MA20") {
             const maClass = value === "是" ? "ma-yes" : value === "否" ? "ma-no" : "ma-neutral";

@@ -17,6 +17,8 @@ def module_available(name: str) -> bool:
 
 
 def normalize_value(value: Any) -> Any:
+    if isinstance(value, list):
+        return [normalize_value(item) for item in value]
     if pd.isna(value):
         return None
     if isinstance(value, pd.Timestamp):
